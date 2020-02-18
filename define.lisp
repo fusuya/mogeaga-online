@@ -306,5 +306,6 @@
 
 
 (defclass game ()
-  ((players   :accessor players    :initform nil   :initarg :players)
-   (donjons    :accessor donjons     :initform 0   :initarg :donjons)))
+  ((players    :accessor players     :initform nil :initarg :players)
+   (donjons    :accessor donjons     :initform 0   :initarg :donjons)
+   (events     :accessor events      :initform nil :initarg :events)))

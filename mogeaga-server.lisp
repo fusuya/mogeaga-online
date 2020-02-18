@@ -35,11 +35,8 @@
   (make-instance 'game :donjons (make-donjons)))
 
 ;;効果音ならす
-(defun sound-play (path)
-  (play-sound path '(:filename :async)))
-
-
-
+(defmethod game-play-sound ((g game) path)
+  (setf (events g) (append (events g) (list `("se" ,path)))))
 
 ;;時間変換
 (defun get-hms (n)
@@ -108,30 +105,30 @@
 	   (when (obj-hit-p p obj)
 	     (case (obj-type obj)
 	       (:key
-		(sound-play *get-item-wav*)
+		(game-play-sound g *get-item-wav*)
 		(setf (key? p) t
 		      (img obj) +yuka+
 		      (obj-type obj) :yuka))
 	       (:potion
-		(sound-play *get-potion-wav*)
+		(game-play-sound g *get-potion-wav*)
 		(setf (hp p) (maxhp p)
 		      (donjon-objects donjon)
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:sword
 		(with-slots (buki) p
-		  (sound-play *get-item-wav*)
+		  (game-play-sound g *get-item-wav*)
 		  (setf (donjon-objects donjon)
 			(remove obj (donjon-objects donjon) :test #'equal))
 		  (when (> *buki-list-len* (atk buki))
 		    (setf (name buki) (nth (atk buki) *buki-list*))
 		    (incf (atk buki))))) ;;武器の攻撃力は１づつ上がる))
 	       (:hammer
-		(sound-play *get-item-wav*)
+		(game-play-sound g *get-item-wav*)
 		(incf (hammer p))
 		(setf (donjon-objects donjon)
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:boots
-		(sound-play *get-item-wav*)
+		(game-play-sound g *get-item-wav*)
 		(push obj (item p))
 		(setf (ido-spd p) 3 ;;移動速度アップ
 		      (boots? p) t
@@ -139,7 +136,7 @@
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:door
 		(when (key? p)
-		  (sound-play *door-wav*)
+		  (game-play-sound g *door-wav*)
 		  (incf (stage p))
 		  (let ((pos (player-init-pos (aref donjons (stage p)))))
 		    (setf (key? p) nil
@@ -148,7 +145,7 @@
 			  (x p) (* (car pos) *blo-w46*)
 			  (y p) (* (cadr pos) *blo-h46*)))))
 	       (:open-door
-		(sound-play *door-wav*)
+		(game-play-sound g *door-wav*)
 		(incf (stage p)))))))))
 
 
@@ -171,19 +168,19 @@
   (incf (def atker) (random 3)))
 
 ;;経験値取得
-(defun player-get-exp (atker defender)
+(defun player-get-exp (atker defender g)
   (when (eq 'player (type-of atker))
     (incf (expe atker) (expe defender))
     (loop while (>= (expe atker) (lvup-exp atker))
        do
-	 (sound-play *lvup-wav*)
+	 (game-play-sound g *lvup-wav*)
 	 (status-up atker)
 	 (incf (level atker))
 	 (setf (expe atker) (- (expe atker) (lvup-exp atker)))
 	 (incf (lvup-exp atker) 20))))
 
 ;;ダメージ計算して　表示する位置とか設定
-(defun set-damage (atker defender)
+(defun set-damage (atker defender g)
   (with-slots (x y obj-type hp atk-spd) defender
     (let* ((dmg-x (+ x 10))
 	   (dmg-y (+ y 20))
@@ -195,7 +192,7 @@
       (decf (hp defender) dmg-num) ;;hpを減らす
       (when (>= 0 (hp defender)) ;; hpが0以下になったら死亡
 	(setf (dead defender) t)
-	(player-get-exp atker defender))
+	(player-get-exp atker defender g))
       (setf (dmg defender) dmg) ;;ダメージを表示するためのもの
       (when (and (eq obj-type :boss) ;;ボス発狂モード
 		 (>= 50 hp))
@@ -212,15 +209,15 @@
 		   (obj-hit-p buki e)
 		   (null (dead e)))
 	  (setf (atkhit p) t) ;;攻撃があたりました
-	  (set-damage p e)))
+	  (set-damage p e g)))
       (loop for e in (donjon-enemies (aref (donjons g) (stage p)))
 	 do (when (and (obj-hit-p buki e)
 		       (null (dead e)))
 	      (case (obj-type e)
 		((:slime :orc :hydra :dragon :brigand :briball :yote1 :toge :boss)
-		 (sound-play *atk-enemy-wav*)
+		 (game-play-sound g *atk-enemy-wav*)
 		 (setf (atkhit p) t) ;;攻撃があたりました
-		 (set-damage p e)))))))) ;;ダメージ処理
+		 (set-damage p e g)))))))) ;;ダメージ処理
 
 
 
@@ -279,7 +276,7 @@
 	      ;;(setf (obj-type kabe) :yuka
 		;;    (img kabe) +yuka+)))
       (when hit?
-	;;(sound-play *atk-block-wav*)
+	;;(game-play-sound *atk-block-wav*)
 	(decf (hammer p))))))
 
 ;;画像右側めりこみ判定
@@ -310,8 +307,8 @@
     (loop for e in (donjon-enemies (aref donjons (stage p)))
        do (when (and (obj-hit-p p e)
 		     (null (dead e)))
-	    (sound-play *damage-wav*)
-	    (set-damage e p) 
+	    (game-play-sound g *damage-wav*)
+	    (set-damage e p g) 
 	    (setf (dmg-c p) 50)
 	    (case (obj-type e)
 	      (:briball
@@ -907,12 +904,6 @@
     :|buki| ,(make-object-list (buki p))
     :|dead| ,(json-true-false (dead p))))
 
-
-
-
-
-
-
 (defun make-players-list (g)
   (loop for p in (players g)
        collect (make-player-list g p)))
@@ -920,7 +911,8 @@
 (defun make-donjon-data (g)
   (append `(:|type| "playing")
           ;;(donjon-data-list (donjon g))
-          `(:|players| ,(make-players-list g))))
+          `(:|players| ,(make-players-list g))
+	  `(:|events| ,(events g))))
 
 
 
@@ -1046,7 +1038,8 @@
 
 ;;リモートプレーヤーにゲーム状態のJSONを送る。
 (defun game-broadcast-map (g)
-  (game-broadcast-message g (make-donjon-data g)))
+  (game-broadcast-message g (make-donjon-data g))
+  (setf (events g) nil))
 
 
 ;; (defun game-broadcast-result (g)
