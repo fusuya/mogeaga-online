@@ -873,7 +873,7 @@
   `(:|x| ,(x p) :|y| ,(y p)
      :|w| ,(w p) :|h| ,(h p)
      :|moto-w| ,(moto-w p) :|moto-h| ,(moto-h p)
-     ;;:|w/2| (w/2 p) :|h/2| (h/2 p)
+     ;;:|w/2| ,(w/2 p) :|h/2| ,(h/2 p)
      :|img| ,(img p) :|obj-type| ,(obj-type p)))
 
 (defun make-enemy-list (p)
@@ -881,7 +881,8 @@
      :|dmg| ,(check-dmg-list p) :|anime-img| ,(anime-img p)
      :|w| ,(w p) :|h| ,(h p) :|dir| ,(dir p)
      :|moto-w| ,(moto-w p) :|moto-h| ,(moto-h p)
-     :|w/2| (w/2 p) :|h/2| (h/2 p) :|dead| ,(json-true-false (dead p))
+     ;;:|w/2| ,(w/2 p) :|h/2| ,(h/2 p)
+     :|dead| ,(json-true-false (dead p))
      :|img| ,(img p) :|obj-type| ,(obj-type p)))
 
 
