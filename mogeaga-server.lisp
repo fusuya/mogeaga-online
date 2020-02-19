@@ -1055,8 +1055,9 @@
      (sb-int:simple-stream-error
       (c)
       (declare (ignore c))
-
-      (v:error :network "~aへのメッセージ送信時にストリームエラー。" (name rp))))))
+      (game-kill-player  rp)
+      ;;(remote-player-close-stream rp)
+      (v:error :network "~aへのメッセージ送信時にストリームエラー。死亡扱い。" (name rp))))))
 
 ;;リモートプレーヤーにゲーム状態のJSONを送る。
 (defun game-broadcast-map (g)
