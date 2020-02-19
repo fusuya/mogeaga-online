@@ -1059,10 +1059,26 @@
       ;;(remote-player-close-stream rp)
       (v:error :network "~aへのメッセージ送信時にストリームエラー。死亡扱い。" (name rp))))))
 
+(defun backgrounds (g)
+  (loop for i from 1 to 10
+	collect (let ((blocks (donjon-blocks (aref (donjons g) i)))
+		      (yuka (donjon-yuka (aref (donjons g) i))))
+		  (list :|blocks| (mapcar #'make-object-list
+					  (remove-if (lambda (b) (eq (obj-type b) :soft-block))
+						     blocks))
+			:|yuka| (mapcar #'make-object-list yuka)))))
+
+(defun add-backgrounds (donjon-data g)
+  (append donjon-data
+	  `(:|backgrounds| ,(backgrounds g))))
+
 ;;リモートプレーヤーにゲーム状態のJSONを送る。
-(defun game-broadcast-map (g)
-  (game-broadcast-message g (make-donjon-data g))
-  (setf (events g) nil))
+(defun game-broadcast-map (g &key with-backgrounds)
+  (let ((data (if with-backgrounds
+		  (make-donjon-data g)
+		(add-backgrounds (make-donjon-data g) g))))
+    (game-broadcast-message g data)
+    (setf (events g) nil)))
 
 
 ;; (defun game-broadcast-result (g)
