@@ -871,7 +871,9 @@
      :|w| ,(w p) :|h| ,(h p)
      :|moto-w| ,(moto-w p) :|moto-h| ,(moto-h p)
      ;;:|w/2| ,(w/2 p) :|h/2| ,(h/2 p)
-     :|img| ,(img p) :|obj-type| ,(obj-type p)))
+     :|img| ,(img p)
+     ;;:|obj-type| ,(obj-type p)
+     ))
 
 (defun make-enemy-list (p)
   `(:|x| ,(x p) :|y| ,(y p) :|hp| ,(hp p) :|maxhp| ,(maxhp p)
@@ -880,29 +882,49 @@
      :|moto-w| ,(moto-w p) :|moto-h| ,(moto-h p)
      ;;:|w/2| ,(w/2 p) :|h/2| ,(h/2 p)
      :|dead| ,(json-true-false (dead p))
-     :|img| ,(img p) :|obj-type| ,(obj-type p)))
+     :|img| ,(img p)
+     ;;:|obj-type| ,(obj-type p)
+     ))
 
 
 ;;ダンジョンのデータリスト
 (defun donjon-data-list (map)
-  `(:|blocks| ,(mapcar #'make-object-list (donjon-blocks map))
+  `(:|blocks| ,(mapcar #'make-object-list (remove-if
+					   (lambda (b)
+					     (eq (obj-type b) :hard-block))
+					   (donjon-blocks map)))
      :|enemies| ,(mapcar #'make-enemy-list (donjon-enemies map))
      :|item| ,(mapcar #'make-object-list (donjon-objects map))
-     :|yuka| ,(mapcar #'make-object-list (donjon-yuka map))))
+     ;;:|yuka| ,(mapcar #'make-object-list (donjon-yuka map))
+  ))
 
 (defun make-player-list (g p)
-  `(:|id| ,(id p) :|level| ,(level p) :|donjon| ,(donjon-data-list (aref (donjons g) (stage p)))
-    :|name| ,(name p) :|hp| ,(hp p) :|maxhp| ,(maxhp p)
-    :|x| ,(x p) :|y| ,(y p) :|exp| ,(expe p) :|stage| ,(stage p)
-    :|lvup-exp| ,(lvup-exp p) :|str| ,(str p) :|def| ,(def p)
-    :|moto-w| ,(moto-w p) :|moto-h| ,(moto-h p)
-    :|dmg| ,(check-dmg-list p) :|hammer| ,(hammer p)
-    :|w| ,(w p) :|h| ,(h p) :|dir| ,(dir p)
-    :|img| ,(img p) :|obj-type| ,(obj-type p)
-    :|hammer-now| ,(json-true-false (hammer-now p))
-    :|atk-now| ,(json-true-false (atk-now p))
-    :|buki| ,(make-object-list (buki p))
-    :|dead| ,(json-true-false (dead p))))
+  `(:|id| ,(id p)
+     :|level| ,(level p)
+     :|donjon| ,(donjon-data-list (aref (donjons g) (stage p)))
+     :|name| ,(name p)
+     :|hp| ,(hp p)
+     :|maxhp| ,(maxhp p)
+     :|x| ,(x p)
+     :|y| ,(y p)
+     :|exp| ,(expe p)
+     :|stage| ,(stage p)
+     :|lvup-exp| ,(lvup-exp p)
+     :|str| ,(str p)
+     :|def| ,(def p)
+     :|moto-w| ,(moto-w p)
+     :|moto-h| ,(moto-h p)
+     :|dmg| ,(check-dmg-list p)
+     :|hammer| ,(hammer p)
+     :|w| ,(w p)
+     :|h| ,(h p)
+     :|dir| ,(dir p)
+     :|img| ,(img p)
+     ;;:|obj-type| ,(obj-type p)
+     :|hammer-now| ,(json-true-false (hammer-now p))
+     :|atk-now| ,(json-true-false (atk-now p))
+     :|buki| ,(make-object-list (buki p))
+     :|dead| ,(json-true-false (dead p))))
 
 (defun make-players-list (g)
   (loop for p in (players g)
@@ -1033,13 +1055,30 @@
      (sb-int:simple-stream-error
       (c)
       (declare (ignore c))
+      (game-kill-player  rp)
+      ;;(remote-player-close-stream rp)
+      (v:error :network "~aへのメッセージ送信時にストリームエラー。死亡扱い。" (name rp))))))
 
-      (v:error :network "~aへのメッセージ送信時にストリームエラー。" (name rp))))))
+(defun backgrounds (g)
+  (loop for i from 1 to 10
+	collect (let ((blocks (donjon-blocks (aref (donjons g) i)))
+		      (yuka (donjon-yuka (aref (donjons g) i))))
+		  (list :|blocks| (mapcar #'make-object-list
+					  (remove-if (lambda (b) (eq (obj-type b) :soft-block))
+						     blocks))
+			:|yuka| (mapcar #'make-object-list yuka)))))
+
+(defun add-backgrounds (donjon-data g)
+  (append donjon-data
+	  `(:|backgrounds| ,(backgrounds g))))
 
 ;;リモートプレーヤーにゲーム状態のJSONを送る。
-(defun game-broadcast-map (g)
-  (game-broadcast-message g (make-donjon-data g))
-  (setf (events g) nil))
+(defun game-broadcast-map (g &key with-backgrounds)
+  (let ((data (if with-backgrounds
+		  (make-donjon-data g)
+		(add-backgrounds (make-donjon-data g) g))))
+    (game-broadcast-message g data)
+    (setf (events g) nil)))
 
 
 ;; (defun game-broadcast-result (g)
@@ -1088,8 +1127,7 @@
 ;; リモートプレーヤーから届いているコマンドを受け取る。
 (defun try-read-remote-commands (g)
   (dolist (rp (players g))
-    (when (and (not (command rp))
-               (listen (stream1 rp)))
+    (when (listen (stream1 rp))
       ;; 読み込めるデータがある。1行全て読み込める
       ;; とは限らないが…。
       (v:debug :game "プレーヤー~aからコマンドの読み込み開始。" (name rp))
@@ -1097,8 +1135,6 @@
         (v:debug :game "プレーヤー~aからコマンドの読み込み完了。~a" (name rp) cmd)
         (if (valid-command? cmd)
             (progn
-              (when (command rp)
-                (v:warn :game "~aのコマンドは既に~aに設定されている。" (command rp)))
               (setf (command rp) cmd))
 	    (progn
 	      (when (not (dead rp))
@@ -1204,7 +1240,8 @@
          (app-func nil)
          ;; first-registration-time: 最初の参加者が登録した時刻。
          (first-registration-time nil)
-         (turn-start-time nil))
+         (turn-start-time nil)
+	 (frame 0))
 
     (labels
         ((player-registration
@@ -1270,6 +1307,7 @@
           (when (not turn-start-time)
             (setf turn-start-time (get-internal-real-time)))
 
+	  #|
           (let ((seconds-elapsed (truncate (- (get-internal-real-time) turn-start-time)
                                            internal-time-units-per-second)))
             (when (>= seconds-elapsed +client-read-timeout+)
@@ -1279,6 +1317,7 @@
                   (game-kill-player  rp)
                   (remote-player-close-stream rp)
                   (v:error :game "プレーヤー~aから~a秒以内にコマンドを受けとれなかったので死亡扱い。" (name rp) +client-read-timeout+)))))
+	  |#
 
           (cond
 	    ((null (players g))
@@ -1305,12 +1344,11 @@
                   (v:error :game "~aがやめました。" (name rp))
 		  (setf (players g) (remove rp (players g) :test #'equal))))
               ;; ゲーム状態の更新。
-              (when (every #'command (remove-if #'dead (players g)))
+              (when t ;;(every #'command (remove-if #'dead (players g)))
                 (update-game g)
-                (dolist (p (players g))
-                  (setf (command p) nil)) ;; プレーヤーのコマンドをクリア.
-                ;; 全員死んでる状態で敵AIを動かすとコケるので。
-                (game-broadcast-map g)
+                ;;(dolist (p (players g))
+                ;;  (setf (command p) nil)) ;; プレーヤーのコマンドをクリア.
+                (game-broadcast-map g :with-backgrounds t)
                 (setf turn-start-time (get-internal-real-time)))))))
 
       (setf *random-state* (make-random-state t))
@@ -1318,8 +1356,16 @@
 
       ;;ループ
       (loop
-       (funcall app-func)
-       (sleep 0.01)))))
+       (let ((t0 (get-internal-real-time)))
+	 (if (zerop (mod frame 1000))
+	     (v:debug :server "~A frames elapsed" frame))
+	 (funcall app-func)
+	 (incf frame)
+	 (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
+	   (if (< d 1/30)
+	       (sleep (- 1/30 d))
+	     (v:warn :server "処理に時間のかかったフレーム。~A秒" d))))
+       ))))
 
 
 
