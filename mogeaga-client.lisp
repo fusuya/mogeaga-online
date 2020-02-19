@@ -183,7 +183,8 @@
   (let* ((x (lookup "x" obj)) (y (lookup "y" obj))
 	 (w (lookup "w" obj)) (h (lookup "h" obj)) (dead (lookup "dead" obj))
 	 (img (lookup "img" obj))
-	 (moto-w (lookup "moto-w" obj)) (moto-h (lookup "moto-h" obj)))
+	 (moto-w (or (lookup "moto-w" obj) (lookup "w" obj)))
+         (moto-h (or (lookup "moto-h" obj) (lookup "h" obj))))
     (when (null dead) ;;Ž€‚ñ‚Å‚È‚©‚Á‚½‚ç•\Ž¦
       (select-object *hogememdc* *anime-monsters-img*)
       (new-trans-blt x y (* moto-w img) (* moto-h anime-num)
@@ -223,7 +224,8 @@
 (defun render-p-atk (obj atk-img)
   (let* ((x (lookup "x" obj)) (y (lookup "y" obj)) (name (lookup "name" obj))
 	 (w (lookup "w" obj)) (h (lookup "h" obj)) (dir1 (lookup "dir" obj))
-	 (moto-w (lookup "moto-w" obj)) (moto-h (lookup "moto-h" obj))
+	 (moto-w (or (lookup "moto-w" obj) (lookup "w" obj)))
+         (moto-h (or (lookup "moto-h" obj) (lookup "h" obj)))
 	 (img (lookup "img" obj)) (buki (lookup "buki" obj))
 	 (xb (lookup "x" buki)) (yb (lookup "y" buki)))
     (render-player-name name x y)
@@ -255,7 +257,8 @@
       (t
        (let ((x (lookup "x" obj)) (y (lookup "y" obj)) (name (lookup "name" obj))
 	     (w (lookup "w" obj)) (h (lookup "h" obj)) (dir (lookup "dir" obj))
-	     (moto-w (lookup "moto-w" obj)) (moto-h (lookup "moto-h" obj))
+	     (moto-w (or (lookup "moto-w" obj) (lookup "w" obj)))
+             (moto-h (or (lookup "moto-h" obj) (lookup "h" obj)))
 	     (img (lookup "img" obj)))
 	 (render-player-name name x y)
 	 (select-object *hogememdc* *p-img*)
@@ -268,7 +271,8 @@
 (defun render-objs-img (obj)
   (let ((x (lookup "x" obj)) (y (lookup "y" obj))
 	(w (lookup "w" obj)) (h (lookup "h" obj))
-	(moto-w (lookup "moto-w" obj)) (moto-h (lookup "moto-h" obj))
+	(moto-w (or (lookup "moto-w" obj) (lookup "w" obj)))
+        (moto-h (or (lookup "moto-h" obj) (lookup "h" obj)))
 	(img (lookup "img" obj)))
     (select-object *hogememdc* *objs-img*)
     (new-trans-blt x y (* moto-w img) 0
@@ -470,9 +474,21 @@
 		   :transparent-color (encode-rgb 0 255 0)))
 
 
+(defun decode-u32 (arr)
+  (+ (ash (aref arr 0) 24)
+     (ash (aref arr 1) 16)
+     (ash (aref arr 2) 8)
+     (ash (aref arr 3) 0)))
 
 (defun read-message (stream)
-  (jonathan:parse (read-line stream) :as :alist))
+  (let ((arr (make-array 4 :element-type '(unsigned-byte 8))))
+    (read-sequence arr stream)
+    (let* ((len (decode-u32 arr))
+           (buf (make-array len :element-type '(unsigned-byte 8))))
+      (read-sequence buf stream)
+      (let ((str (babel:octets-to-string (gzip-stream:gunzip-sequence buf) :encoding :utf-8)))
+        (v:debug :network str)
+        (jonathan:parse str :as :alist)))))
 
 ;;(defun message-type (message)
 ;;  (intern (map 'string #'char-upcase (lookup "type" message))))
