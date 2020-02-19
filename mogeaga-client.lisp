@@ -325,6 +325,10 @@
       (when (= (lookup "stage" player) now-stage)
 	(render-player player)))))
 
+(defun render-objects (objs)
+  (loop for obj in objs
+        do (render-objs-img obj)))
+
 ;;ブロック描画
 (defun render-block (mes)
   (let ((blocks (lookup "blocks" mes)))
@@ -398,17 +402,24 @@
 		 (null dead))
 	(render-hpbar e hp maxhp))))))
 
+(defvar *backgrounds* nil)
+
 ;;マップを表示
 (defun render-map (mes)
+  (let ((backgrounds (lookup "backgrounds" mes)))
+    (if backgrounds
+        (setf *backgrounds* (coerce backgrounds 'vector))))
+
   (let* ((players (lookup "players" mes))
 	 (mine (find *id* players :key #'(lambda (x) (lookup "id" x))))
 	 (now-stage (lookup "stage" mine))
-	 (mes (lookup "donjon" mine)))
+	 (donjon (lookup "donjon" mine)))
     (render-background)
-    (render-yuka mes)
-    (render-block mes)
-    (render-item mes)
-    (render-enemies mes)
+    (render-objects (lookup "yuka" (aref *backgrounds* (1- now-stage))))
+    (render-objects (lookup "blocks" (aref *backgrounds* (1- now-stage)))) ; hard-block
+    (render-block donjon) ; soft-block
+    (render-item donjon)
+    (render-enemies donjon)
     (render-players players now-stage)
     (render-all-damage donjon)
     (render-events (lookup "events" mes))))
@@ -562,22 +573,17 @@
 
 
 
-(defun set-command ()
+(defun keystate->command ()
   (with-slots (z c q up down right left) *keystate*
     (cond
-      (z  (setf *command* "Z"))
-      (c  (setf *command* "C"))
-      (q  (setf *command* "Q"))
-      (up (setf *command* "UP"))
-      (down (setf *command* "DOWN"))
-      (right (setf *command* "RIGHT"))
-      (left (setf *command* "LEFT"))
-      (t (setf *command* "STAY")))))
-
-(defun send-command ()
-  (format *stream* "~a~%" *command*)
-  (force-output *stream*)
-  (setf *command* nil))
+      (z  "Z")
+      (c  "C")
+      (q  "Q")
+      (up "UP")
+      (down "DOWN")
+      (right "RIGHT")
+      (left "LEFT")
+      (t "STAY"))))
 
 ;;プレイ中のループ
 (defun wait-game-start ()
@@ -592,8 +598,13 @@
 	     (display-status message))
 	    ((string= mes "playing")
 	     (render-map message)
-	     (set-command)
-	     (send-command))
+
+             (when (not (equal *command* (keystate->command)))
+               (setf *command* (keystate->command))
+               (format *stream* "~a~%" *command*)
+               (force-output *stream*))
+
+             )
 	    ;;(after-idle #'send-command))
 	    ((string= mes "quit")
 	     (init-parameter))
