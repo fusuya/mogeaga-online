@@ -500,7 +500,7 @@
                   (return-from make-socket-stream nil))))))
 
     (if (ignore-errors (socket-connect sock addr port) t)
-	(socket-make-stream sock :input t :output t :element-type :default)
+	(socket-make-stream sock :input t :output t :element-type :default :external-format :utf-8)
       nil)))
 
 
