@@ -1035,11 +1035,24 @@
   (format (stream1 player) "~a~%" (id player))
   (finish-output (stream1 player)))
 
+(defun encode-u32 (n)
+  (let ((ls nil))
+    (push (mod n 256) ls)
+    (setf n (truncate n 256))
+    (push (mod n 256) ls)
+    (setf n (truncate n 256))
+    (push (mod n 256) ls)
+    (setf n (truncate n 256))
+    (push (mod n 256) ls)
+    (setf n (truncate n 256))
+    ls))
 
 (defmethod remote-player-send-message ((rp player) data)
   (when (stream1 rp)
-    (let ((json (jonathan:to-json data)))
-      (format (stream1 rp) "~a~%" json)
+    (let ((json (gzip-stream:gzip-sequence
+		 (babel:string-to-octets (jonathan:to-json data) :encoding :utf-8))))
+      (write-sequence (encode-u32 (length json)) (stream1 rp))
+      (write-sequence json (stream1 rp))
       (finish-output (stream1 rp)))))
 
 (defun remote-player-send-name-error (rp)
