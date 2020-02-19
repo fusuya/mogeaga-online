@@ -410,10 +410,13 @@
     (render-item mes)
     (render-enemies mes)
     (render-players players now-stage)
-    (render-all-damage mes)))
+    (render-all-damage donjon)
+    (render-events (lookup "events" mes))))
 
-
-
+(defun render-events (events)
+  (dolist (e events)
+    (if (string= (first e) "se")
+        (play-sound (second e) '(:filename :async)))))
 
 ;;test
 (defun render-test ()
