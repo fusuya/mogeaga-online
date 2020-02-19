@@ -979,6 +979,17 @@
             (aref addr 3)
             port)))
 
+(defun read-line2 (stream)
+  (let ((len 0) (product nil))
+	  (let ((byte (read-byte stream nil nil)))
+	    (loop until (or (null byte) (= byte 10)) do
+	      (push byte product)
+	      (incf len)
+	      (setf byte (read-byte stream nil nil))))
+  (babel:octets-to-string
+    (make-array len :element-type '(unsigned-byte 8) :initial-contents (nreverse product))
+    :encoding :utf-8)))
+
 
 (defmethod remote-player-receive-name (rp)
   (let ((len 0) (product nil) (name ""))
@@ -1042,7 +1053,7 @@
 
 
 (defmethod remote-player-send-id (player)
-  (format (stream1 player) "~a~%" (id player))
+  (write-sequence (babel:string-to-octets (format nil "~a~%" (id player)) :encoding :utf-8) (stream1 player))
   (finish-output (stream1 player)))
 
 (defun encode-u32 (n)
@@ -1154,7 +1165,7 @@
       ;; 読み込めるデータがある。1行全て読み込める
       ;; とは限らないが…。
       (v:debug :game "プレーヤー~aからコマンドの読み込み開始。" (name rp))
-      (let ((cmd (chomp (read-line (stream1 rp)))))
+      (let ((cmd (chomp (read-line2 (stream1 rp)))))
         (v:debug :game "プレーヤー~aからコマンドの読み込み完了。~a" (name rp) cmd)
         (if (valid-command? cmd)
             (progn
@@ -1278,7 +1289,7 @@
               (let* ((stream (socket-make-stream client
                                                  :input t
                                                  :output t
-                                                 :element-type :default
+                                                 :element-type '(unsigned-byte 8)
                                                  :timeout +client-read-timeout+))
                      (player (make-instance 'remote-player :stream1 stream :socket1 client)))
                 (handler-case
