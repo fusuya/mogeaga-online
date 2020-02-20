@@ -477,6 +477,7 @@
      (ash (aref arr 2) 8)
      (ash (aref arr 3) 0)))
 
+(defparameter *lastmsg* :empty)
 (defun read-message (stream)
   (let ((arr (make-array 4 :element-type '(unsigned-byte 8))))
     (read-sequence arr stream)
@@ -485,7 +486,9 @@
       (read-sequence buf stream)
       (let ((str (babel:octets-to-string (gzip-stream:gunzip-sequence buf) :encoding :utf-8)))
         (v:debug :network str)
-        (jonathan:parse str :as :plist)))))
+        (let ((diff (jonathan:parse str :as :plist)))
+	  (setf *lastmsg* (diff:patch *lastmsg* diff))
+	  *lastmsg*)))))
 
 ;;(defun message-type (message)
 ;;  (intern (map 'string #'char-upcase (getf message :|type|))))
