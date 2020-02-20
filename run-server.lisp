@@ -13,4 +13,5 @@
 (in-package :cl-user)
 
 (defun main ()
+  (setf (v:repl-level) :debug)
   (moge::server-main))

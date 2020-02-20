@@ -1072,6 +1072,7 @@
   (when (stream1 rp)
     (let ((json (gzip-stream:gzip-sequence
 		 (babel:string-to-octets (jonathan:to-json data) :encoding :utf-8))))
+      (v:debug :network "size ~A bytes" (length json))
       (write-sequence (encode-u32 (length json)) (stream1 rp))
       (write-sequence json (stream1 rp))
       (finish-output (stream1 rp)))))
@@ -1398,7 +1399,7 @@
 	 (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
 	   (if (< d 1/30)
 	       (sleep (- 1/30 d))
-	     (v:warn :server "処理に時間のかかったフレーム。~A秒" d))))
+	     (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))
        ))))
 
 
