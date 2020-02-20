@@ -87,4 +87,6 @@
   (cond
    ((null from) nil)
    (t
-    (patch (first from) (first diff)))))
+    (cons
+     (patch (first from) (first diff))
+     (patch-plain-list (cdr from) (cdr diff))))))
