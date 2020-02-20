@@ -571,7 +571,7 @@
 
 
 (defun display-status (status-message)
-  (let ((players (getf (lookup "map" status-message) :|players|))
+  (let ((players (getf (getf status-message :|map|) :|players|))
 	(num 30))
     (macrolet ((hoge (n)
 		 `(incf ,n 40)))
