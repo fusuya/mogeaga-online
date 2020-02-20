@@ -70,10 +70,6 @@
       (let ((hoge (nth (random (length lst)) lst)))
 	(rand-dir (remove hoge lst) (cons hoge new-lst)))))
 
-
-
-
-
 ;;判定
 (defun obj-hit-p (obj1 obj2)
   (let ((obj1-px (+ (x obj1) (w/2 obj1)))
@@ -155,8 +151,6 @@
 		(game-play-sound g *door-wav*)
 		(incf (stage p)))))))))
 
-
-
 ;;ダメージ計算
 (defmethod damage-calc ((atker player) defender)
   (with-slots (buki) atker
@@ -206,7 +200,6 @@
 	(setf (atk-spd defender) 40))
       )))
 
-
 ;;敵と武器の当たり判定
 (defun buki-hit-enemy (p g)
   (when (atk-now p)
@@ -225,8 +218,6 @@
 		 (game-play-sound g *atk-enemy-wav*)
 		 (setf (atkhit p) t) ;;攻撃があたりました
 		 (set-damage p e g)))))))) ;;ダメージ処理
-
-
 
 ;;武器の画像を設定
 (defun set-buki-pos (p)
@@ -306,8 +297,6 @@
       (setf img (+ (funcall walk-func img 1)))
       (setf walk-c 0))))
 
-
-
 ;;プレイヤー被ダメージ処理
 (defun hit-enemies-player (p g)
   (with-slots (donjons) g
@@ -321,12 +310,6 @@
 	      (:briball
 	       (setf (donjon-enemies (aref donjons (stage p)))
 		     (remove e (donjon-enemies (aref donjons (stage p))) :test #'equal))))))))
-
-
-
-
-
-
     
 ;;ランダム方向へ移動 '(:up :down :right :left :stop)
 (defun set-rand-dir (g e)
@@ -359,8 +342,6 @@
 	       (progn (setf (dir e) :left)
 		      (return)))))))
 
-
-
 ;;敵の移動
 (defun update-enemy-pos (g e)
   (case (dir e)
@@ -385,9 +366,6 @@
 	      (when kabe
 		(setf (x e) (+ (x kabe) (w kabe)))
 		(set-rand-dir g e))))))
-    
-
-
 
 ;;dx dy以内のeから見たプレイヤーの方向を返す
 (defun enemy-can-atk? (g e dx dy)
@@ -419,9 +397,6 @@
 	(when ret
 	  (return-from enemy-can-atk? ret))))
     ret))
-	
-
-
 
 ;;プレイヤーにeの攻撃があたる方向 atk-x = 攻撃距離
 (defun set-can-atk-dir (g e atk-x atk-y)
@@ -429,8 +404,6 @@
     (if f-dir
 	(setf (dir e) f-dir)
 	nil)))
-      
-
 
 ;;スライムの行動
 (defun update-slime (g e change-dir-time)
@@ -440,7 +413,6 @@
       (progn (set-rand-dir g e)
 	     (setf (dir-c e) 0))
       (update-enemy-pos g e)))
-
 
 ;;オークの攻撃エフェクト追加
 (defun add-orc-atk-effect (g e dx dy)
@@ -467,7 +439,6 @@
     (setf (atk-now e) nil
 	  (atk-c e) 0)))
 
-
 ;;オークの行動
 (defun update-orc (g e)
   (cond
@@ -484,7 +455,6 @@
 	 (progn (set-rand-dir g e)
 		(setf (dir-c e) 0))
 	 (update-enemy-pos g e)))))
-
 
 ;;ヒドラの攻撃エフェクトを敵として追加
 (defun add-hydra-atk (g e)
@@ -511,7 +481,6 @@
     (when (>= (atk-c e) *hydra-atk-effect-time*)
       (setf (donjon-enemies (aref (donjons g) (stage e)))
 	    (remove e (donjon-enemies (aref (donjons g) (stage e))) :test #'equal)))))
-
 
 ;;ヒドラの行動
 (defun update-hydra (g e)
@@ -541,7 +510,6 @@
 	  (y ball) (- (y e) dy))
     (if (null (block-hit-p g ball))
 	(push ball (donjon-enemies (aref (donjons g) (stage e)))))))
-  
 
 ;;ブリガンドボールの方向
 (defun add-bri-ball-dir (g e)
@@ -550,7 +518,6 @@
     (:down (add-bri-ball g e 0 -20))
     (:left (add-bri-ball g e 20 0))
     (:right (add-bri-ball g e -20 0))))
-  
 
 ;;ブリガンドの行動
 (defun update-brigand (g e)
@@ -632,9 +599,6 @@
       (when (= fire-n max-fire)
 	(setf (atk-now e) nil
 	      (atk-c e) 0)))))
-
-
-
 
 ;;ドラゴンの行動
 (defun update-dragon (g e)
@@ -1273,148 +1237,153 @@
 (defun game-end? (g)
   (every #'dead (players g)))
 
+(defclass server ()
+  (
+   (server-socket :initform (make-server-socket))
+   (g :initform (new-game))
+   ;; app-func:
+   ;;     player-registration プレーヤー登録受け付け中。
+   ;;     playing ゲームプレイ中。
+   (app-func :initform #'player-registration)
+   ;; first-registration-time: 最初の参加者が登録した時刻。
+   (first-registration-time :initform nil)
+   (frame :initform 0)
+   ))
+
+(defmethod player-registration ((s server))
+  (with-slots
+   (app-func g first-registration-time server-socket)
+   s
+
+   ;; プレーヤーの登録処理。
+
+   ;; 非ブロックモードのソケットなのでacceptはブロックしない。
+   (let ((client (socket-accept server-socket)))
+     (when client
+       ;; クライアントからの接続がある。
+       (v:info :network "クライアントから接続: ~a" (socket-peername-string client))
+       ;; ハンドシェイク。この処理は同期的でブロックし得る。
+       (let* ((stream (socket-make-stream client
+                                          :input t
+                                          :output t
+                                          :element-type '(unsigned-byte 8)
+                                          :timeout +client-read-timeout+))
+              (player (make-instance 'remote-player :stream1 stream :socket1 client)))
+         (handler-case
+             (remote-player-receive-name player)
+
+           (handshake-error
+            (c)
+            (declare (ignore c))
+
+            (v:error :network "~aとのハンドシェイクに失敗。" (socket-peername-string client))
+            (remote-player-close-stream player)
+            (return-from player-registration))
+
+           (sb-sys:io-timeout
+            (c)
+            (declare (ignore c))
+
+            (v:error :network "~aとのハンドシェイク中にタイムアウト。" (socket-peername-string client))
+            (remote-player-close-stream player)
+            (return-from player-registration)))
+
+         ;; ハンドシェイクが完了したらゲーム構造体にプレーヤー
+         ;; を追加。(id player)がセットされる。
+         (game-add-player g player)
+	 ;; first-registration-timeがnilの場合は、これが最初の
+	 ;; プレーヤーであるので、現在時刻からゲーム開始までの
+	 ;; カウントダウンを開始する。
+         (when (not first-registration-time)
+           (setf first-registration-time (get-internal-real-time)))
+         (v:info :game "プレーヤー~a(ID: ~a)を登録。" (name player) (id player))
+         (remote-player-send-id player))))
+
+   ;; カウントダウン中ならばstatusメッセージをブロードキャスト
+   ;; する。
+   (when first-registration-time
+     (let ((timeout (- +registration-timeout+
+		       (truncate (- (get-internal-real-time)
+				    first-registration-time)
+				 internal-time-units-per-second))))
+
+       (game-broadcast-status g timeout)
+       ;; メッセージのが送信できなかったらそのプレーヤーの死亡
+       ;; フラグが立つので、そのプレーヤーを削除する。
+       (setf (players g) (remove-if #'dead (players g)))
+       ;; プレーヤーが残っていなかったら、カウントダウンをキャ
+       ;; ンセルする。
+       (when (null (players g))
+	 (setf first-registration-time nil))
+
+       ))
+
+   ;; 最初の参加から+registration-timeout+秒たったか、あるいは4
+   ;; 人揃っていたらゲーム開始。
+   (when first-registration-time
+     (let ((sec (truncate (- (get-internal-real-time) first-registration-time)
+			  internal-time-units-per-second)))
+       (when (or (>= sec +registration-timeout+)
+                 (<= 4 (length (players g))))
+         (setf app-func #'playing)
+         (setf first-registration-time nil)
+         (v:info :game "ゲーム開始。")
+	 ;; 最初のmapメッセージでは各階の不変な地形を送る。
+         (game-broadcast-map g :with-backgrounds t))))))
+
+(defmethod playing ((s server))
+  (with-slots
+   (app-func g) s
+
+   (cond
+    ((null (players g))
+     (v:info :game "プレーヤーが居なくなったためゲーム終了")
+
+     (setf g (new-game))
+     (setf app-func #'player-registration))
+
+    ((game-end? g)
+     (v:info :game "ゲーム終了")
+     (game-broadcast-result g)
+     (game-close-connections g)
+
+     (setf g (new-game))
+     (setf app-func #'player-registration))
+
+    (t
+     (try-read-remote-commands g)
+     ;;プレイヤーからの終了コマンド
+     (dolist (rp (players g))
+       (when (and (not (dead rp))
+                  (equal (command rp) "Q"))
+	 (game-kill-player  rp)
+	 (game-broadcast-quit rp)
+	 (remote-player-close-stream rp)
+	 (v:error :game "~aがやめました。" (name rp))
+	 (setf (players g) (remove rp (players g) :test #'equal))))
+     ;; ゲーム状態の更新。
+     (update-game g)
+     (game-broadcast-map g)
+     ))))
+
+(defmethod server-do-iter ((s server))
+  (with-slots
+   (frame app-func) s
+
+   (let ((t0 (get-internal-real-time)))
+     (if (zerop (mod frame 1000))
+	 (v:debug :server "~A frames elapsed" frame))
+     (funcall app-func s)
+     (incf frame)
+     (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
+       (if (< d 1/30)
+	   (sleep (- 1/30 d))
+	 (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))))
+
 ;;さば
 (defun server-main ()
-  (let* ((server-socket (make-server-socket))
-         (g (new-game))
-         ;; app-func:
-         ;;     player-registration プレーヤー登録受け付け中。
-         ;;     playing ゲームプレイ中。
-         (app-func nil)
-         ;; first-registration-time: 最初の参加者が登録した時刻。
-         (first-registration-time nil)
-	 (frame 0))
-
-    (labels
-        ((player-registration
-          ()
-
-          ;; プレーヤーの登録処理。
-
-	  ;; 非ブロックモードのソケットなのでacceptはブロックしない。
-          (let ((client (socket-accept server-socket)))
-            (when client
-              ;; クライアントからの接続がある。
-              (v:info :network "クライアントから接続: ~a" (socket-peername-string client))
-	      ;; ハンドシェイク。この処理は同期的でブロックし得る。
-              (let* ((stream (socket-make-stream client
-                                                 :input t
-                                                 :output t
-                                                 :element-type '(unsigned-byte 8)
-                                                 :timeout +client-read-timeout+))
-                     (player (make-instance 'remote-player :stream1 stream :socket1 client)))
-                (handler-case
-                 (remote-player-receive-name player)
-
-                 (handshake-error
-                  (c)
-                  (declare (ignore c))
-
-                  (v:error :network "~aとのハンドシェイクに失敗。" (socket-peername-string client))
-                  (remote-player-close-stream player)
-                  (return-from player-registration))
-
-                 (sb-sys:io-timeout
-                  (c)
-                  (declare (ignore c))
-
-                  (v:error :network "~aとのハンドシェイク中にタイムアウト。" (socket-peername-string client))
-                  (remote-player-close-stream player)
-                  (return-from player-registration)))
-
-                ;; ハンドシェイクが完了したらゲーム構造体にプレーヤー
-                ;; を追加。(id player)がセットされる。
-                (game-add-player g player)
-		;; first-registration-timeがnilの場合は、これが最初の
-		;; プレーヤーであるので、現在時刻からゲーム開始までの
-		;; カウントダウンを開始する。
-                (when (not first-registration-time)
-                  (setf first-registration-time (get-internal-real-time)))
-                (v:info :game "プレーヤー~a(ID: ~a)を登録。" (name player) (id player))
-                (remote-player-send-id player))))
-
-	  ;; カウントダウン中ならばstatusメッセージをブロードキャスト
-	  ;; する。
-	  (when first-registration-time
-	    (let ((timeout (- +registration-timeout+
-			      (truncate (- (get-internal-real-time)
-					   first-registration-time)
-					internal-time-units-per-second))))
-
-	      (game-broadcast-status g timeout)
-	      ;; メッセージのが送信できなかったらそのプレーヤーの死亡
-	      ;; フラグが立つので、そのプレーヤーを削除する。
-	      (setf (players g) (remove-if #'dead (players g)))
-	      ;; プレーヤーが残っていなかったら、カウントダウンをキャ
-	      ;; ンセルする。
-	      (when (null (players g))
-		(setf first-registration-time nil))
-
-	      ))
-
-          ;; 最初の参加から+registration-timeout+秒たったか、あるいは4
-          ;; 人揃っていたらゲーム開始。
-	  (when first-registration-time
-            (let ((sec (truncate (- (get-internal-real-time) first-registration-time)
-				 internal-time-units-per-second)))
-            (when (or (>= sec +registration-timeout+)
-                      (<= 4 (length (players g))))
-              (setf app-func #'playing)
-              (setf first-registration-time nil)
-              (v:info :game "ゲーム開始。")
-	      ;; 最初のmapメッセージでは各階の不変な地形を送る。
-              (game-broadcast-map g :with-backgrounds t)))))
-
-         (playing
-          ()
-
-          (cond
-	    ((null (players g))
-	     (v:info :game "プレーヤーが居なくなったためゲーム終了")
-
-	     (setf g (new-game))
-	     (setf app-func #'player-registration))
-
-	    ((game-end? g)
-	     (v:info :game "ゲーム終了")
-	     (game-broadcast-result g)
-	     (game-close-connections g)
-
-	     (setf g (new-game))
-	     (setf app-func #'player-registration))
-
-            (t
-              (try-read-remote-commands g)
-	      ;;プレイヤーからの終了コマンド
-	      (dolist (rp (players g))
-                (when (and (not (dead rp))
-                           (equal (command rp) "Q"))
-                  (game-kill-player  rp)
-		  (game-broadcast-quit rp)
-                  (remote-player-close-stream rp)
-                  (v:error :game "~aがやめました。" (name rp))
-		  (setf (players g) (remove rp (players g) :test #'equal))))
-              ;; ゲーム状態の更新。
-              (update-game g)
-              (game-broadcast-map g)
-              )))))
-
-	;; ----------------------------------------------
-	(setf *random-state* (make-random-state t))
-	(setf app-func #'player-registration)
-
-	;;ループ
-	(loop
-	 (let ((t0 (get-internal-real-time)))
-	   (if (zerop (mod frame 1000))
-	       (v:debug :server "~A frames elapsed" frame))
-	   (funcall app-func)
-	   (incf frame)
-	   (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
-	     (if (< d 1/30)
-		 (sleep (- 1/30 d))
-	       (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))
-	 ))))
-
-
-
+  (setf *random-state* (make-random-state t))
+  (let ((s (make-instance 'server)))
+    ;;ループ
+    (loop
+     (server-do-iter s))))
