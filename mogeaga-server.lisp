@@ -1068,10 +1068,13 @@
     (setf n (truncate n 256))
     ls))
 
-(defmethod remote-player-send-message ((rp player) data)
+(defmethod remote-player-send-message ((rp remote-player) data)
   (when (stream1 rp)
-    (let ((json (gzip-stream:gzip-sequence
-		 (babel:string-to-octets (jonathan:to-json data) :encoding :utf-8))))
+    (let* ((diff (diff:diff (lastmsg rp) data))
+	   (json (gzip-stream:gzip-sequence
+		  (babel:string-to-octets (jonathan:to-json diff) :encoding :utf-8))))
+      (setf (lastmsg rp) data)
+      (v:debug :network "size ~A bytes" (length json))
       (write-sequence (encode-u32 (length json)) (stream1 rp))
       (write-sequence json (stream1 rp))
       (finish-output (stream1 rp)))))
@@ -1079,7 +1082,6 @@
 (defun remote-player-send-name-error (rp)
   (format (stream1 rp) "change-name~%")
   (finish-output (stream1 rp)))
-
 
 (defun game-broadcast-message (g data)
   (dolist (rp (players g))
@@ -1398,7 +1400,7 @@
 	 (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
 	   (if (< d 1/30)
 	       (sleep (- 1/30 d))
-	     (v:warn :server "処理に時間のかかったフレーム。~A秒" d))))
+	     (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))
        ))))
 
 
