@@ -15,7 +15,14 @@
         *p* (make-instance 'player :w *p-w* :h *p-h* :str 5 :def 2 :stage 1 :state :title
 			   :moto-w *p-w* :moto-h *p-h* :atk-now nil :ido-spd 2 :level 1
 			   :w/2 (floor *obj-w* 2) :h/2 (floor *obj-h* 2) :hammer 3
-			   :name "もげぞう" :img +down+ :buki (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0))
+			   :name "もげぞう" :img +down+
+			   :buki (make-instance 'buki
+						:name "こん棒"
+						:atk 1
+						:w *p-w* :h *p-h*
+						:moto-w *p-w* :moto-h *p-h*
+						:w/2 *p-w/2* :h/2 *p-h/2*
+						:img 0))
         *map* (make-donjon :tate *tate-block-num* :yoko *yoko-block-num*))
   (maze *map*))
 
@@ -1079,10 +1086,6 @@
       (write-sequence json (stream1 rp))
       (finish-output (stream1 rp)))))
 
-(defun remote-player-send-name-error (rp)
-  (format (stream1 rp) "change-name~%")
-  (finish-output (stream1 rp)))
-
 (defun game-broadcast-message (g data)
   (dolist (rp (players g))
     (handler-case
@@ -1110,18 +1113,22 @@
 
 ;;リモートプレーヤーにゲーム状態のJSONを送る。
 (defun game-broadcast-map (g &key with-backgrounds)
-  (let ((data (if with-backgrounds
-		  (make-donjon-data g)
-		(add-backgrounds (make-donjon-data g) g))))
+  (let ((data (make-donjon-data g)))
+    (if with-backgrounds
+	(setf data (add-backgrounds data g)))
     (game-broadcast-message g data)
+    ;; イベントリストはブロードキャストごとにクリアする。
     (setf (events g) nil)))
 
 
-;; (defun game-broadcast-result (g)
-;;   (game-broadcast-message
-;;    g
-;;    `(:|type| "result"
-;;       :|ranking| ,(make-ranking-data g))))
+(defun make-ranking-data (g)
+  :[])
+
+(defun game-broadcast-result (g)
+  (game-broadcast-message
+   g
+   `(:|type| "result"
+      :|ranking| ,(make-ranking-data g))))
 
 (defun game-broadcast-status (g timeout-seconds)
   (game-broadcast-message g `(:|type| "status" :|timeout-seconds| ,timeout-seconds
@@ -1276,18 +1283,20 @@
          (app-func nil)
          ;; first-registration-time: 最初の参加者が登録した時刻。
          (first-registration-time nil)
-         (turn-start-time nil)
 	 (frame 0))
 
     (labels
         ((player-registration
           ()
 
-          ;; 1. プレーヤーの登録処理。
+          ;; プレーヤーの登録処理。
+
+	  ;; 非ブロックモードのソケットなのでacceptはブロックしない。
           (let ((client (socket-accept server-socket)))
             (when client
-              (v:info :network "クライアントから接続: ~a" (socket-peername-string client))
               ;; クライアントからの接続がある。
+              (v:info :network "クライアントから接続: ~a" (socket-peername-string client))
+	      ;; ハンドシェイク。この処理は同期的でブロックし得る。
               (let* ((stream (socket-make-stream client
                                                  :input t
                                                  :output t
@@ -1296,6 +1305,7 @@
                      (player (make-instance 'remote-player :stream1 stream :socket1 client)))
                 (handler-case
                  (remote-player-receive-name player)
+
                  (handshake-error
                   (c)
                   (declare (ignore c))
@@ -1303,6 +1313,7 @@
                   (v:error :network "~aとのハンドシェイクに失敗。" (socket-peername-string client))
                   (remote-player-close-stream player)
                   (return-from player-registration))
+
                  (sb-sys:io-timeout
                   (c)
                   (declare (ignore c))
@@ -1310,64 +1321,68 @@
                   (v:error :network "~aとのハンドシェイク中にタイムアウト。" (socket-peername-string client))
                   (remote-player-close-stream player)
                   (return-from player-registration)))
-                ;; XXX: 同名のプレーヤーは登録しない措置が必要か。
-                ;; (when (check-atama g player) ;;名前の頭文字がかぶってないか判定
-                ;;   (let ((timeout (- +registration-timeout+
-                ;;                     (truncate (- (get-internal-real-time) first-registration-time) internal-time-units-per-second))))
-                ;;     (game-broadcast-change-name g player timeout)
-                ;;     (return-from player-registration)))
-                
+
+                ;; ハンドシェイクが完了したらゲーム構造体にプレーヤー
+                ;; を追加。(id player)がセットされる。
                 (game-add-player g player)
+		;; first-registration-timeがnilの場合は、これが最初の
+		;; プレーヤーであるので、現在時刻からゲーム開始までの
+		;; カウントダウンを開始する。
                 (when (not first-registration-time)
                   (setf first-registration-time (get-internal-real-time)))
                 (v:info :game "プレーヤー~a(ID: ~a)を登録。" (name player) (id player))
                 (remote-player-send-id player))))
-	  (when first-registration-time
-	    (let ((timeout (- +registration-timeout+ (truncate (- (get-internal-real-time) first-registration-time) internal-time-units-per-second))))
-	      (game-broadcast-status g timeout)))
 
-          ;; 2. 最初の参加から30秒あるいは4人揃っていたらゲーム開始。
-          (let ((sec (if first-registration-time
-                         (truncate (- (get-internal-real-time) first-registration-time) internal-time-units-per-second)
-                       0)))
+	  ;; カウントダウン中ならばstatusメッセージをブロードキャスト
+	  ;; する。
+	  (when first-registration-time
+	    (let ((timeout (- +registration-timeout+
+			      (truncate (- (get-internal-real-time)
+					   first-registration-time)
+					internal-time-units-per-second))))
+
+	      (game-broadcast-status g timeout)
+	      ;; メッセージのが送信できなかったらそのプレーヤーの死亡
+	      ;; フラグが立つので、そのプレーヤーを削除する。
+	      (setf (players g) (remove-if #'dead (players g)))
+	      ;; プレーヤーが残っていなかったら、カウントダウンをキャ
+	      ;; ンセルする。
+	      (when (null (players g))
+		(setf first-registration-time nil))
+
+	      ))
+
+          ;; 最初の参加から+registration-timeout+秒たったか、あるいは4
+          ;; 人揃っていたらゲーム開始。
+	  (when first-registration-time
+            (let ((sec (truncate (- (get-internal-real-time) first-registration-time)
+				 internal-time-units-per-second)))
             (when (or (>= sec +registration-timeout+)
                       (<= 4 (length (players g))))
               (setf app-func #'playing)
               (setf first-registration-time nil)
               (v:info :game "ゲーム開始。")
-              (game-broadcast-map g))))
+	      ;; 最初のmapメッセージでは各階の不変な地形を送る。
+              (game-broadcast-map g :with-backgrounds t)))))
 
          (playing
           ()
 
-          (when (not turn-start-time)
-            (setf turn-start-time (get-internal-real-time)))
-
-	  #|
-          (let ((seconds-elapsed (truncate (- (get-internal-real-time) turn-start-time)
-                                           internal-time-units-per-second)))
-            (when (>= seconds-elapsed +client-read-timeout+)
-              (dolist (rp (players g))
-                (when (and (not (dead rp))
-                           (not (command rp)))
-                  (game-kill-player  rp)
-                  (remote-player-close-stream rp)
-                  (v:error :game "プレーヤー~aから~a秒以内にコマンドを受けとれなかったので死亡扱い。" (name rp) +client-read-timeout+)))))
-	  |#
-
           (cond
 	    ((null (players g))
-	     (v:info :game "ゲーム終了");; (make-ranking-data g))
+	     (v:info :game "プレーヤーが居なくなったためゲーム終了")
+
 	     (setf g (new-game))
-	     (setf turn-start-time nil)
 	     (setf app-func #'player-registration))
+
 	    ((game-end? g)
-	     (v:info :game "ゲーム終了");; (make-ranking-data g))
-	     ;;(game-broadcast-result g)
+	     (v:info :game "ゲーム終了")
+	     (game-broadcast-result g)
 	     (game-close-connections g)
+
 	     (setf g (new-game))
-	     (setf turn-start-time nil)
 	     (setf app-func #'player-registration))
+
             (t
               (try-read-remote-commands g)
 	      ;;プレイヤーからの終了コマンド
@@ -1380,28 +1395,26 @@
                   (v:error :game "~aがやめました。" (name rp))
 		  (setf (players g) (remove rp (players g) :test #'equal))))
               ;; ゲーム状態の更新。
-              (when t ;;(every #'command (remove-if #'dead (players g)))
-                (update-game g)
-                ;;(dolist (p (players g))
-                ;;  (setf (command p) nil)) ;; プレーヤーのコマンドをクリア.
-                (game-broadcast-map g :with-backgrounds t)
-                (setf turn-start-time (get-internal-real-time)))))))
+              (update-game g)
+              (game-broadcast-map g)
+              )))))
 
-      (setf *random-state* (make-random-state t))
-      (setf app-func #'player-registration)
+	;; ----------------------------------------------
+	(setf *random-state* (make-random-state t))
+	(setf app-func #'player-registration)
 
-      ;;ループ
-      (loop
-       (let ((t0 (get-internal-real-time)))
-	 (if (zerop (mod frame 1000))
-	     (v:debug :server "~A frames elapsed" frame))
-	 (funcall app-func)
-	 (incf frame)
-	 (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
-	   (if (< d 1/30)
-	       (sleep (- 1/30 d))
-	     (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))
-       ))))
+	;;ループ
+	(loop
+	 (let ((t0 (get-internal-real-time)))
+	   (if (zerop (mod frame 1000))
+	       (v:debug :server "~A frames elapsed" frame))
+	   (funcall app-func)
+	   (incf frame)
+	   (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
+	     (if (< d 1/30)
+		 (sleep (- 1/30 d))
+	       (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))
+	 ))))
 
 
 
