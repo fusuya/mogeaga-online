@@ -302,9 +302,11 @@
   ((stream1    :accessor stream1     :initform nil :initarg :stream1)
    (command    :accessor command     :initform nil :initarg :command)
    (id         :accessor id          :initform 0   :initarg :id)
-   (socket1    :accessor socket1     :initform nil :initarg :socket1)))
+   (socket1    :accessor socket1     :initform nil :initarg :socket1)
+   (lastmsg    :accessor lastmsg     :initform :empty :initarg :lastmsg)))
 
 
 (defclass game ()
-  ((players   :accessor players    :initform nil   :initarg :players)
-   (donjons    :accessor donjons     :initform 0   :initarg :donjons)))
+  ((players    :accessor players     :initform nil :initarg :players)
+   (donjons    :accessor donjons     :initform 0   :initarg :donjons)
+   (events     :accessor events      :initform nil :initarg :events)))
