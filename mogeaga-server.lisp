@@ -1,8 +1,9 @@
 ;;TODO 
-;;遠距離攻撃 階層どうする
+;;オークの攻撃消えない　経験値 
+;;ダメージ処理改善 ダンジョン生成ボス
 (defvar *port* 24336)
 (defvar +client-read-timeout+ 10)
-(defvar +registration-timeout+ 42) ;;一人目の参加から何秒でゲームを開始するか。
+(defvar +registration-timeout+ 10) ;;一人目の参加から何秒でゲームを開始するか。
 
 ;;ゲーム初期化
 (defun init-game ()
@@ -896,6 +897,7 @@
      :|h| ,(h p)
      :|dir| ,(dir p)
      :|img| ,(img p)
+     :|ready?| ,(json-true-false (ready? p))
      :|hammer-now| ,(json-true-false (hammer-now p))
      :|atk-now| ,(json-true-false (atk-now p))
      :|buki| ,(make-object-list (buki p))
@@ -1126,6 +1128,7 @@
    (equal "RIGHT" str)
    (equal "UP" str)
    (equal "DOWN" str)
+   (equal "ENTER" str)
    (equal "STAY" str)))
 
 (defun make-error-message (&key reason message)
@@ -1294,19 +1297,35 @@
 	 ;; first-registration-timeがnilの場合は、これが最初の
 	 ;; プレーヤーであるので、現在時刻からゲーム開始までの
 	 ;; カウントダウンを開始する。
-         (when (not first-registration-time)
-           (setf first-registration-time (get-internal-real-time)))
+         ;;(when (not first-registration-time)
+         ;;  (setf first-registration-time (get-internal-real-time)))
          (v:info :game "プレーヤー~a(ID: ~a)を登録。" (name player) (id player))
          (remote-player-send-id player))))
-
+   ;;準備完了チェック
+   (try-read-remote-commands g)
+   (dolist (rp (players g))
+     (when (equal "ENTER" (command rp))
+       (setf (ready? rp) t)))
+   (when (and (every #'ready? (players g))
+	      (null first-registration-time))
+     (setf first-registration-time (get-internal-real-time)))
+   
    ;; カウントダウン中ならばstatusメッセージをブロードキャスト
    ;; する。
-   (when first-registration-time
-     (let ((timeout (- +registration-timeout+
-		       (truncate (- (get-internal-real-time)
-				    first-registration-time)
-				 internal-time-units-per-second))))
-
+   ;; (when first-registration-time
+   ;;   (let ((timeout (- +registration-timeout+
+   ;; 		       (truncate (- (get-internal-real-time)
+   ;; 				    first-registration-time)
+   ;; 				 internal-time-units-per-second))))
+   (when (null (players g))
+     (setf first-registration-time nil))
+   (when (players g)
+     (let ((timeout (if first-registration-time
+			(- +registration-timeout+
+			   (truncate (- (get-internal-real-time)
+					first-registration-time)
+				     internal-time-units-per-second))
+			999)))
        (game-broadcast-status g timeout)
        ;; メッセージのが送信できなかったらそのプレーヤーの死亡
        ;; フラグが立つので、そのプレーヤーを削除する。
@@ -1315,8 +1334,7 @@
        ;; ンセルする。
        (when (null (players g))
 	 (setf first-registration-time nil))
-
-       ))
+     ))
 
    ;; 最初の参加から+registration-timeout+秒たったか、あるいは4
    ;; 人揃っていたらゲーム開始。

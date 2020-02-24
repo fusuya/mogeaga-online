@@ -464,7 +464,7 @@
            (buf (make-array len :element-type '(unsigned-byte 8))))
       (read-sequence buf stream)
       (let ((str (babel:octets-to-string (gzip-stream:gunzip-sequence buf) :encoding :utf-8)))
-        (v:debug :network str)
+        ;;(v:debug :network str)
         (let ((diff (jonathan:parse str :as :plist)))
 	  (setf *lastmsg* (diff:patch *lastmsg* diff))
 	  *lastmsg*)))))
@@ -554,15 +554,18 @@
 		 `(incf ,n 40)))
       (render-background)
       (do-msg (format nil "受付完了：ゲーム開始待ち中") 100 num *font40*)
+      (do-msg (format nil "Enterで準備完了") 100 (incf40 num) *font40*)
       (do-msg (format nil "参加者待ち(開始まで~a秒)" (getf status-message :|timeout-seconds|))
 	100 (incf40 num) *font40*)
       (do-msg "参加プレーヤー:" 100 (incf40 num) *font40*)
       (dolist (p players)
-	(do-msg (format nil  "~a~%" (getf p :|name|))
-	  100 (incf40 num) *font40*)))))
+	(let* ((ready? (getf p :|ready?|))
+	       (msg (if ready? "準備完了" "準備中")))
+	  (do-msg (format nil  "~a:~a~%" (getf p :|name|) msg)
+	    100 (incf40 num) *font40*))))))
 
 (defun keystate->command ()
-  (with-slots (z c q up down right left) *keystate*
+  (with-slots (z c q up down right left enter) *keystate*
     (cond
       (z  "Z")
       (c  "C")
@@ -571,6 +574,7 @@
       (down "DOWN")
       (right "RIGHT")
       (left "LEFT")
+      (enter "ENTER")
       (t "STAY"))))
 
 ;;プレイ中のループ
@@ -581,7 +585,11 @@
 	       (type (message-type message)))
 	  (cond
 	    ((string= type "status")
-	     (display-status message))
+	     (display-status message)
+	     (when (not (equal *command* (keystate->command)))
+               (setf *command* (keystate->command))
+               (format *stream* "~a~%" *command*)
+               (force-output *stream*)))
 	    ((string= type "playing")
 	     (render-map message)
 
