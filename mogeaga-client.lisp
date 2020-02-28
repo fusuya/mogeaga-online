@@ -174,7 +174,7 @@
          (moto-h (or (getf obj :|moto-h|) (getf obj :|h|))))
     (when (null dead) ;;Ž€‚ñ‚Å‚È‚©‚Á‚½‚ç•\Ž¦
       (select-object *hogememdc* *anime-monsters-img*)
-      (trans-blt x y (* moto-w img) (* moto-h anime-num)
+      (trans-blt x y (* moto-w img) (* *obj-h* anime-num)
 		     moto-w moto-h w h))))
 
 ;;“G•\Ž¦
@@ -464,7 +464,7 @@
            (buf (make-array len :element-type '(unsigned-byte 8))))
       (read-sequence buf stream)
       (let ((str (babel:octets-to-string (gzip-stream:gunzip-sequence buf) :encoding :utf-8)))
-        ;;(v:debug :network str)
+        (v:debug :network str)
         (let ((diff (jonathan:parse str :as :plist)))
 	  (setf *lastmsg* (diff:patch *lastmsg* diff))
 	  *lastmsg*)))))
@@ -596,9 +596,9 @@
              (when (not (equal *command* (keystate->command)))
                (setf *command* (keystate->command))
                (format *stream* "~a~%" *command*)
-               (force-output *stream*))
-
-             )
+               (force-output *stream*)))
+	    ((string= type "end")
+	     (init-parameter))
 	    ((string= type "quit")
 	     (init-parameter))
 	    (t

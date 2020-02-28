@@ -18,12 +18,12 @@
 		(setf (aref map i j) 30))))) ;;壊せる壁
 
 ;;ボスフロア
-(defun create-boss-stage (map tate yoko) 
+(defun create-boss-stage (map tate yoko)
   (loop for i from 0 below tate do
        (loop for j from 0 below yoko do
 	    (if (or (= i 0) (= j 0) (= i (1- tate)) (= j (1- yoko)))
 		(setf (aref map i j) 40) ;;壊せない壁
-		(setf (aref map i j) 0))))) ;;壊せる壁
+		(setf (aref map i j) 0)))))
 
 (defun rand1234 (lst lst1)
   (if (null lst1)
@@ -231,15 +231,14 @@
 
 ;;ボス配置
 (defun set-boss (map)
-  (let* ((e-pos (list (floor (donjon-yoko map) 2) 1))
-	 (boss (make-instance 'enemy :x (* (car e-pos) *blo-w46*)
-			      :y (* (cadr e-pos) *blo-h46*)
+  (let* ((boss (make-instance 'enemy :x (* 10 *blo-w46*)
+			      :y (* 4 *blo-h46*)
 			      :moto-w 64 :moto-h 64
 			      :str 10  :def 20 :hp 100
 			      :maxhp 100 :anime-img +boss-anime+
 			      :ido-spd 2 :expe 0
-			      :w 64 :h 64 :atk-spd 80
-			      :w/2 32 :h/2 32
+			      :w 32 :h 32 :atk-spd 40
+			      :w/2 16 :h/2 16
 			      :obj-type :boss
 			      :img 1)))
     (push boss (donjon-enemies map))))
@@ -326,21 +325,23 @@
 		  
 
 ;;迷路マップ生成
-(defun maze (map)
+(defun maze (map i)
   (let* ((x 0)
          (startx 0)
          (y 0)
          (starty 0))
     (clear-mapdate map)
     (setf (donjon-map map) (make-array (list (donjon-tate map) (donjon-yoko map))));;マップ配列作成
-    (full-block-map (donjon-map map) (donjon-tate map) (donjon-yoko map)) ;;マップをブロックで埋める
+    
     (cond
-      ;; ((= (stage p) 30) ;; 100階は固定マップ
-      ;;  (create-boss-stage (donjon-map map) (donjon-tate map) (donjon-yoko map))
-      ;;  (setf (y p) (* (- (donjon-tate map) 2) *blo-w46*)
-      ;; 	     (x p) (* (floor (donjon-yoko map) 2) *blo-h46*));;プレイヤー位置
-      ;;  (set-boss map))
+      ((= i *donjons-num*) ;;boss
+       (create-boss-stage (donjon-map map) (donjon-tate map) (donjon-yoko map))
+       (push (list 10 10) (donjon-path map))
+       ;; (setf (y p) (* (- (donjon-tate map) 2) *blo-w46*)
+       ;; 	     (x p) (* (floor (donjon-yoko map) 2) *blo-h46*));;プレイヤー位置
+       (set-boss map))
       (t
+       (full-block-map (donjon-map map) (donjon-tate map) (donjon-yoko map)) ;;マップをブロックで埋める
        ;;奇数座標を初期位置にする
        (setf x (random (floor (donjon-yoko map) 2))
 	     y (random (floor (donjon-tate map) 2))

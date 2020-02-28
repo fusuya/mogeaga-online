@@ -1,5 +1,5 @@
 ;;TODO 
-;;オークの攻撃消えない　経験値 
+;;オークの攻撃消えない
 ;;ダメージ処理改善 ダンジョン生成ボス
 (defvar *port* 24336)
 (defvar +client-read-timeout+ 10)
@@ -29,11 +29,10 @@
 
 ;;ダンジョンを最初に全部作成しておく
 (defun make-donjons ()
-  (let* ((donjons-num 10)
-	 (donjons-arr (make-array (1+ donjons-num))))
-    (loop :for i :from 1 :to donjons-num
+  (let ((donjons-arr (make-array (1+ *donjons-num*))))
+    (loop :for i :from 1 :to *donjons-num*
        :do (let ((d (make-donjon :tate *tate-block-num* :yoko *yoko-block-num* :stage i)))
-	     (maze d)
+	     (maze d i)
 	     (setf (aref donjons-arr i) d)))
     donjons-arr))
 	 
@@ -95,10 +94,7 @@
 
 ;;階層変わったときユニット初期位置
 (defun player-init-pos (donjon)
-  (let* ((e-pos (nth (random (length (donjon-path donjon))) (donjon-path donjon))))
-    (setf (donjon-path donjon)
-	  (remove e-pos (donjon-path donjon) :test #'equal))
-    e-pos))
+  (nth (random (length (donjon-path donjon))) (donjon-path donjon)))
 
 ;;プレイヤーとフロアにあるアイテムの当たり判定
 (defun player-hit-item (p g)
@@ -171,7 +167,7 @@
 
 ;;経験値取得
 (defun player-get-exp (atker defender g)
-  (when (eq 'player (type-of atker))
+  (when (eq 'remote-player (type-of atker))
     (incf (expe atker) (expe defender))
     (loop while (>= (expe atker) (lvup-exp atker))
        do
@@ -342,6 +338,15 @@
 	       (incf (x e))
 	       (progn (setf (dir e) :left)
 		      (return)))))))
+
+;;スライムの移動
+(defun update-boss-pos (g e)
+  (case (dir e)
+    (:stop )
+    (:up    (decf (y e) (ido-spd e)))
+    (:down  (incf (y e) (ido-spd e)))
+    (:right (incf (x e) (ido-spd e)))
+    (:left  (decf (x e) (ido-spd e)))))
 
 ;;敵の移動
 (defun update-enemy-pos (g e)
@@ -665,18 +670,18 @@
      (incf (atk-c e))
      (when (zerop (mod (atk-c e) (atk-spd e)))
        (let ((ran (random 2)))
-	 (cond
-	   ((and (= 0 ran) ;;攻撃
-		 (set-can-atk-dir g e (* (w e) 30) (* (h e) 30)))
-	    (setf (atk-now e) :fire))
-	   ((= ran 1)
-	    (setf (atk-now e) :toge)))
-	 (setf (atk-c e) 0)))
+     	 (cond
+     	   ((and (= 0 ran) ;;攻撃
+     		 (set-can-atk-dir g e (* (w e) 30) (* (h e) 30)))
+     	    (setf (atk-now e) :fire))
+     	   ((= ran 1)
+     	    (setf (atk-now e) :toge)))
+     	 (setf (atk-c e) 0)))
      (update-ido-anime-img e)
-     (if (> (dir-c e) 40)
+     (if (> (dir-c e) 20)
 	 (progn (set-rand-dir g e)
 		(setf (dir-c e) 0))
-	 (update-enemy-pos g e)))))
+	 (update-boss-pos g e)))))
 
 ;;ボスのとげ攻撃の更新
 (defun update-toge (g e)
@@ -1016,7 +1021,7 @@
 	  (w player) *p-w* (moto-w player) *p-w*
 	  (h player) *p-h* (moto-h player) *p-h*
 	  (w/2 player) *p-w/2* (h/2 player) *p-h/2*
-	  (stage player) 1 (str player) 5 (def player) 2
+	  (stage player) 10 (str player) 5 (def player) 2
 	  (ido-spd player) 2
 	  (buki player)
 	  (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
@@ -1362,7 +1367,7 @@
 
     ((game-end? g)
      (v:info :game "ゲーム終了")
-     (game-broadcast-result g)
+     ;;(game-broadcast-result g)
      (game-close-connections g)
 
      (setf g (new-game))
@@ -1386,17 +1391,17 @@
 
 (defmethod server-do-iter ((s server))
   (with-slots
-   (frame app-func) s
+	(frame app-func) s
 
-   (let ((t0 (get-internal-real-time)))
-     (if (zerop (mod frame 1000))
-	 (v:debug :server "~A frames elapsed" frame))
-     (funcall app-func s)
-     (incf frame)
-     (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
-       (if (< d 1/30)
-	   (sleep (- 1/30 d))
-	 (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))))
+    (let ((t0 (get-internal-real-time)))
+      (if (zerop (mod frame 1000))
+	  (v:debug :server "~A frames elapsed" frame))
+      (funcall app-func s)
+      (incf frame)
+      (let ((d (/ (- (get-internal-real-time) t0) internal-time-units-per-second)))
+	(if (< d 1/30)
+	    (sleep (- 1/30 d))
+	    (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))))
 
 ;;さば
 (defun server-main ()

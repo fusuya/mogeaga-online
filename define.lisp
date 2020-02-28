@@ -22,6 +22,7 @@
 (defparameter *hammer-img* nil)
 (defparameter *monster-anime* nil)
 (defparameter *objs-img* nil)
+(defparameter *donjons-num* 10)
 
 ;;プレイヤー画像切り替えよう
 (defconstant +down+ 0)
@@ -311,3 +312,36 @@
   ((players    :accessor players     :initform nil :initarg :players)
    (donjons    :accessor donjons     :initform 0   :initarg :donjons)
    (events     :accessor events      :initform nil :initarg :events)))
+
+
+
+
+(defun AddDest (move)
+  (ash move 0))
+
+(defun AddStart (move)
+  (ash move 8))
+
+(defun AddPro (move)
+  (ash move 16))
+
+(defun AddMove (move)
+  (ash move 17))
+
+(defun AddCap (move)
+  (ash move 23))
+
+(defun GetDest (move)
+  (logand (ash move 0) #xff))
+
+(defun GetStart (move)
+  (logand (ash move -8) #xff))
+
+(defun GetPro (move)
+  (logand (ash move -16) #x01))
+
+(defun GetMove (move)
+  (logand (ash move -17) #x1f))
+
+(defun GetCap (move)
+  (logand (ash move -23) #xff))
