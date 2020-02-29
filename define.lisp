@@ -22,6 +22,7 @@
 (defparameter *hammer-img* nil)
 (defparameter *monster-anime* nil)
 (defparameter *objs-img* nil)
+;;ダンジョン階数
 (defparameter *donjons-num* 10)
 
 ;;プレイヤー画像切り替えよう
@@ -99,9 +100,6 @@
 (defparameter *lvup-wav* "./wav/lvup.wav")
 
 
-;;拡大
-(Defparameter *mag-w* 1)
-(Defparameter *mag-h* 1)
 
 ;;基本サイズ 元の画像サイズ
 (defparameter *obj-w* 32)
@@ -211,6 +209,7 @@
   (yoko *yoko*)  ;;横幅
   (enemies nil)
   (stage 0)
+  (dmgs nil) ;;表示するdmgリスト
   (path nil)
   (yuka nil) ;;床
   (blocks nil) ;;ブロック
@@ -240,6 +239,7 @@
    (maxy     :accessor maxy      :initform 0     :initarg :maxy)
    (y-dir    :accessor y-dir     :initform :up   :initarg :y-dir)
    (x-dir    :accessor x-dir     :initform :left :initarg :x-dir)
+   (color    :accessor color     :initform nil   :initarg :color)
    ))
 
 (defclass buki (obj)
@@ -304,6 +304,7 @@
    (command    :accessor command     :initform nil :initarg :command)
    (ready?     :accessor ready?      :initform nil :initarg :ready?)
    (id         :accessor id          :initform 0   :initarg :id)
+   (totaldmg   :accessor totaldmg    :initform 0   :initarg :totaldmg)
    (socket1    :accessor socket1     :initform nil :initarg :socket1)
    (lastmsg    :accessor lastmsg     :initform :empty :initarg :lastmsg)))
 
@@ -311,7 +312,8 @@
 (defclass game ()
   ((players    :accessor players     :initform nil :initarg :players)
    (donjons    :accessor donjons     :initform 0   :initarg :donjons)
-   (events     :accessor events      :initform nil :initarg :events)))
+   (events     :accessor events      :initform nil :initarg :events)
+   (clear      :accessor clear       :initform nil :initarg :clear)))
 
 
 

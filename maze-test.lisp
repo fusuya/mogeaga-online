@@ -125,9 +125,9 @@
 ;;出現する敵 階層によって出現率を変える
 (defun appear-enemy ()
   (let* ((m (random 101))
-	 (slime-rate-max 70)
+	 (slime-rate-max 40)
 	 (orc-rate-min   (1+ slime-rate-max))
-	 (orc-rate-max   (+ 30 orc-rate-min))
+	 (orc-rate-max   (+ 10 orc-rate-min))
 	 (bri-rate-min (1+ orc-rate-max))
 	 (bri-rate-max (+ 10  bri-rate-min))
 	 (hydra-rate-min (1+ bri-rate-max))
@@ -234,11 +234,11 @@
   (let* ((boss (make-instance 'enemy :x (* 10 *blo-w46*)
 			      :y (* 4 *blo-h46*)
 			      :moto-w 64 :moto-h 64
-			      :str 10  :def 20 :hp 100
-			      :maxhp 100 :anime-img +boss-anime+
-			      :ido-spd 2 :expe 0
-			      :w 32 :h 32 :atk-spd 40
-			      :w/2 16 :h/2 16
+			      :str 10  :def 20 :hp 1
+			      :maxhp 1 :anime-img +boss-anime+
+			      :ido-spd 2 :expe 0 :stage (donjon-stage map)
+			      :w 64 :h 64 :atk-spd 30
+			      :w/2 32 :h/2 32
 			      :obj-type :boss
 			      :img 1)))
     (push boss (donjon-enemies map))))
@@ -325,7 +325,7 @@
 		  
 
 ;;迷路マップ生成
-(defun maze (map i)
+(defun maze (map)
   (let* ((x 0)
          (startx 0)
          (y 0)
@@ -334,7 +334,7 @@
     (setf (donjon-map map) (make-array (list (donjon-tate map) (donjon-yoko map))));;マップ配列作成
     
     (cond
-      ((= i *donjons-num*) ;;boss
+      ((= (donjon-stage map) *donjons-num*) ;;boss
        (create-boss-stage (donjon-map map) (donjon-tate map) (donjon-yoko map))
        (push (list 10 10) (donjon-path map))
        ;; (setf (y p) (* (- (donjon-tate map) 2) *blo-w46*)

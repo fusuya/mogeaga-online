@@ -355,37 +355,41 @@
     (rectangle *hmemdc* hp-w (- y 15) (+ hp-w (- *hpbar-max* len)) y)))
 
 ;;ダメージ表示
-(defun render-damage (e color)
-  (with-slots (dmg) e
-    (when dmg
-      (select-object *hmemdc* *font20*)
-      
-      (set-bk-mode *hmemdc* :transparent)
-      ;;縁取り
-      (set-text-color *hmemdc* (encode-rgb 0 0 0))
-      (text-out *hmemdc* (format nil "~d" (dmg-num dmg)) (- (x dmg) 2) (y dmg))
-      (text-out *hmemdc* (format nil "~d" (dmg-num dmg)) (+ (x dmg) 2) (y dmg))
-      (text-out *hmemdc* (format nil "~d" (dmg-num dmg)) (x dmg) (- (y dmg) 2))
-      (text-out *hmemdc* (format nil "~d" (dmg-num dmg)) (x dmg) (+ (y dmg) 2))
-      ;;
-      (set-text-color *hmemdc* color)
-      (text-out *hmemdc* (format nil "~d" (dmg-num dmg)) (x dmg) (y dmg))
-      )))
+(defun render-damage (dmg)
+  (let ((color (if (equal "WHITE" (getf dmg :|color|))
+		   (encode-rgb 255 255 255)
+		   (encode-rgb 255 124 0)))
+	(dmg-num (getf dmg :|dmg-num|))
+	(x (getf dmg :|x|))
+	(y (getf dmg :|y|)))
+    (select-object *hmemdc* *font20*)
+    (set-bk-mode *hmemdc* :transparent)
+    ;;縁取り
+    (set-text-color *hmemdc* (encode-rgb 0 0 0))
+    (text-out *hmemdc* (format nil "~d" dmg-num) (- x 2) y)
+    (text-out *hmemdc* (format nil "~d" dmg-num) (+ x 2) y)
+    (text-out *hmemdc* (format nil "~d" dmg-num) x (- y 2))
+    (text-out *hmemdc* (format nil "~d" dmg-num) x (+ y 2))
+    ;;
+    (set-text-color *hmemdc* color)
+    (text-out *hmemdc* (format nil "~d" dmg-num) x y)
+    ))
 
 ;;全てのダメージ表示
-(defun render-all-damage (mes)
-  (let ((players (getf mes :|players|))
-	(enemies (getf mes :|enemies|)))
-    (dolist (p players)
-      (render-dmg p (encode-rgb 255 147 122)))
-    ;;(render-hpbar *p*)
+(defun render-all-damage (donjon)
+  (let ((dmgs (getf donjon :|dmg|)))
+    (dolist (dmg dmgs)
+      (render-damage dmg))))
+
+;;HPバー表示
+(defun render-all-hpbar (donjon)
+  (let ((enemies (getf donjon :|enemies|)))
     (dolist (e enemies)
       (let ((maxhp (getf e :|maxhp|))
 	    (hp (getf e :|hp|)) (dead (getf e :|dead|)))
-      (render-dmg e (encode-rgb 255 255 255))
-      (when (and (/= maxhp hp)
-		 (null dead))
-	(render-hpbar e hp maxhp))))))
+	(when (and (/= maxhp hp)
+		   (null dead))
+	  (render-hpbar e hp maxhp))))))
 
 (defvar *backgrounds* nil)
 
@@ -407,6 +411,7 @@
     (render-enemies donjon)
     (render-players players now-stage)
     (render-all-damage donjon)
+    (render-all-hpbar donjon)
     (render-events (getf mes :|events|))))
 
 (defun render-events (events)
@@ -547,6 +552,17 @@
 	   ((= *cursor* 2)
 	    (send-message hwnd (const +wm-close+) nil nil))))))))
 
+;;結果画面でのキー入力
+(defun input-reslut-gamen (hwnd)
+  (with-slots (q enter) *keystate*
+    (incf *input-time*)
+    (when (zerop (mod *input-time* 8))
+      (cond
+	(enter
+	 (setf *game-state* :title))
+	(q
+	 (send-message hwnd (const +wm-close+) nil nil))))))
+
 (defun display-status (status-message)
   (let ((players (getf (getf status-message :|map|) :|players|))
 	(num 30))
@@ -563,6 +579,28 @@
 	       (msg (if ready? "準備完了" "準備中")))
 	  (do-msg (format nil  "~a:~a~%" (getf p :|name|) msg)
 	    100 (incf40 num) *font40*))))))
+
+;;結果発表
+(defun render-result (mes)
+  (let* ((ranking (getf mes :|ranking|))
+	 (num 30)
+	 (l1 (loop for i in ranking
+		collect (list (getf i :|name|) (getf i :|totaldmg|))))
+	 (l2 (sort l1 #'>= :key #'second)))
+    (macrolet ((incf40 (n)
+		 `(incf ,n 40)))
+      (render-background)
+      (do-msg (format nil "ゲームクリア！") 100 num *font40*)
+      (do-msg (format nil "貢献度ランキング") 100 (incf40 num) *font40*)
+      (loop for p in l2
+	 for i from 1
+	 do (do-msg (format nil  "~a:~aポイント~%" (car p) (cadr p))
+	      100 (incf40 num) *font40*))
+      (do-msg (format nil "Enter:タイトル画面へ") 100 400 *font40*)
+      (do-msg (format nil "q:ゲーム終了") 100 450 *font40*))))
+
+
+    
 
 (defun keystate->command ()
   (with-slots (z c q up down right left enter) *keystate*
@@ -597,6 +635,9 @@
                (setf *command* (keystate->command))
                (format *stream* "~a~%" *command*)
                (force-output *stream*)))
+	    ((string= type "result")
+	     (render-result message)
+	     (setf *game-state* :result))
 	    ((string= type "end")
 	     (init-parameter))
 	    ((string= type "quit")
@@ -616,6 +657,8 @@
      (update-title-and-ending-gamen hwnd))
     (:wait-game-start
      (wait-game-start))
+    (:result
+     (input-reslut-gamen hwnd))
     (:playing)
     (:dead)
     (:ending))

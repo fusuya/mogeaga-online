@@ -5,34 +5,15 @@
 (defvar +client-read-timeout+ 10)
 (defvar +registration-timeout+ 10) ;;一人目の参加から何秒でゲームを開始するか。
 
-;;ゲーム初期化
-(defun init-game ()
-  (setf *battle?* nil
-	*screen-w* (+ *map-w* *status-w*)
-	*screen-h* (+ *map-h* *status-h*)
-	*mag-w* 1
-	*mag-h* 1
-        *start-time* (get-internal-real-time)
-        *p* (make-instance 'player :w *p-w* :h *p-h* :str 5 :def 2 :stage 1 :state :title
-			   :moto-w *p-w* :moto-h *p-h* :atk-now nil :ido-spd 2 :level 1
-			   :w/2 (floor *obj-w* 2) :h/2 (floor *obj-h* 2) :hammer 3
-			   :name "もげぞう" :img +down+
-			   :buki (make-instance 'buki
-						:name "こん棒"
-						:atk 1
-						:w *p-w* :h *p-h*
-						:moto-w *p-w* :moto-h *p-h*
-						:w/2 *p-w/2* :h/2 *p-h/2*
-						:img 0))
-        *map* (make-donjon :tate *tate-block-num* :yoko *yoko-block-num*))
-  (maze *map*))
+
+
 
 ;;ダンジョンを最初に全部作成しておく
 (defun make-donjons ()
   (let ((donjons-arr (make-array (1+ *donjons-num*))))
     (loop :for i :from 1 :to *donjons-num*
        :do (let ((d (make-donjon :tate *tate-block-num* :yoko *yoko-block-num* :stage i)))
-	     (maze d i)
+	     (maze d)
 	     (setf (aref donjons-arr i) d)))
     donjons-arr))
 	 
@@ -186,12 +167,16 @@
 	   (x-dir (if (eq (dir atker) :left) :left :right))
 	   (dmg (make-instance 'dmg-font :x dmg-x :y dmg-y :dmg-num  dmg-num
 			       :y-dir :up :x-dir x-dir
+			       :color (if (eq (type-of defender) 'remote-player)
+					  :red :white)
 			       :maxy dmg-y :miny (- dmg-y 15))))
       (decf (hp defender) dmg-num) ;;hpを減らす
       (when (>= 0 (hp defender)) ;; hpが0以下になったら死亡
 	(setf (dead defender) t)
-	(player-get-exp atker defender g))
-      (setf (dmg defender) dmg) ;;ダメージを表示するためのもの
+	(when (eq (type-of atker) 'remote-player)
+	  (incf (totaldmg atker) dmg-num)
+	  (player-get-exp atker defender g)))
+      (push dmg (donjon-dmgs (aref (donjons g) (stage atker)))) ;;ダメージを表示するためのもの
       (when (and (eq obj-type :boss) ;;ボス発狂モード
 		 (>= 50 hp))
 	(setf (atk-spd defender) 40))
@@ -564,11 +549,11 @@
 (defun boss-add-fire (g e fire-n)
   (let ((fire (make-instance 'enemy :img 0 :obj-type :fire
 			     :str (str e) :anime-img +dragon-fire+
-			     :moto-w *fire-w* :moto-h *fire-h*
+			     :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*))
 	(fire2 (make-instance 'enemy :img 0 :obj-type :fire
 			      :str (str e) :anime-img +dragon-fire+
-			      :moto-w *fire-w* :moto-h *fire-h*
+			      :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			      :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
     (case (dir e)
       (:up (setf (x fire) (x e)
@@ -650,7 +635,7 @@
 ;;ボスのとげ攻撃
 (defun boss-toge-atk (g e)
   (let ((toge (make-instance 'enemy :img 0 :obj-type :toge :hp 1 :maxhp 1
-			     :anime-img +boss-atk1+
+			     :anime-img +boss-atk1+ :stage (stage e)
 			     :str (str e) :x (x e) :y (+ (y e) (floor (h e) 2))
 			     :moto-w *fire-w* :moto-h *fire-h* :vx (rand+- 3) :vy (rand+- 3)
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
@@ -678,7 +663,7 @@
      	    (setf (atk-now e) :toge)))
      	 (setf (atk-c e) 0)))
      (update-ido-anime-img e)
-     (if (> (dir-c e) 20)
+     (if (> (dir-c e) 40)
 	 (progn (set-rand-dir g e)
 		(setf (dir-c e) 0))
 	 (update-boss-pos g e)))))
@@ -708,47 +693,46 @@
 
 
 ;;ダメージフォントの位置更新
-(defun update-damage-font (e)
-  (with-slots (dmg) e
-    (when dmg
-      (cond
-	((eq :up (y-dir dmg))
-	 (if (eq (x-dir dmg) :right)
-	     (incf (x dmg))
-	     (decf (x dmg)))
-	 (decf (y dmg))
-	 (when (= (y dmg) (miny dmg))
-	   (setf (y-dir dmg) :down)))
-	((eq :down (y-dir dmg))
-	 (if (eq (x-dir dmg) :right)
-	     (incf (x dmg))
-	     (decf (x dmg)))
-	 (incf (y dmg))
-	 (when (= (y dmg) (maxy dmg))
-	   (setf dmg nil)))))))
+(defun update-damage-font (donjon)
+  (loop for dmg in (donjon-dmgs donjon)
+     do
+       (cond
+	 ((eq :up (y-dir dmg))
+	  (if (eq (x-dir dmg) :right)
+	      (incf (x dmg))
+	      (decf (x dmg)))
+	  (decf (y dmg))
+	  (when (= (y dmg) (miny dmg))
+	    (setf (y-dir dmg) :down)))
+	 ((eq :down (y-dir dmg))
+	  (if (eq (x-dir dmg) :right)
+	      (incf (x dmg))
+	      (decf (x dmg)))
+	  (incf (y dmg))
+	  (when (= (y dmg) (maxy dmg))
+	    (setf (donjon-dmgs donjon)
+		  (remove dmg (donjon-dmgs donjon) :test #'equal)))))))
 
 ;;敵の位置更新
-(defun update-enemies (g)
-  (with-slots (players donjons) g
-    (let ((stage-list (remove-duplicates (mapcar #'stage players))))
-      (loop for s in stage-list
-	 do (let ((donjon (aref donjons s)))
-	      (loop for e in (donjon-enemies donjon)
-		 do (update-damage-font e)
-		   (when (null (dead e))
-		     (case (obj-type e)
-		       (:slime   (update-slime g e 40))
-		       (:dragon  (update-dragon g e))
-		       (:brigand (update-brigand g e))
-		       (:hydra   (update-hydra g e))
-		       (:hydra-atk (update-hydra-atk g e))
-		       (:fire    (update-fire g e))
-		       (:briball (update-briball g e))
-		       (:orc     (update-orc g e))
-		       (:yote1   (update-slime g e 10))
-		       (:toge    (update-toge g e))
-		       (:boss    (update-boss g e))
-		       (:orc-atk (update-orc-atk-effect g e))))))))))
+(defun update-enemies (g stage-list)
+  (with-slots (donjons) g
+    (loop for s in stage-list
+       do (let ((donjon (aref donjons s)))
+	    (loop for e in (donjon-enemies donjon)
+	       do (when (null (dead e))
+		   (case (obj-type e)
+		     (:slime   (update-slime g e 40))
+		     (:dragon  (update-dragon g e))
+		     (:brigand (update-brigand g e))
+		     (:hydra   (update-hydra g e))
+		     (:hydra-atk (update-hydra-atk g e))
+		     (:fire    (update-fire g e))
+		     (:briball (update-briball g e))
+		     (:orc     (update-orc g e))
+		     (:yote1   (update-slime g e 10))
+		     (:toge    (update-toge g e))
+		     (:boss    (update-boss g e))
+		     (:orc-atk (update-orc-atk-effect g e)))))))))
 
 
 
@@ -758,10 +742,11 @@
 
 
 ;;ダメージフォントの位置更新
-(defun update-damage-fonts ()
-  (update-damage-font *p*)
-  (loop for e in (donjon-enemies *map*)
-     do (update-damage-font e)))
+(defun update-damage-fonts (g stage-list)
+  (with-slots (donjons) g
+    (loop for s in stage-list
+       do (let ((donjon (aref donjons s)))
+	    (update-damage-font donjon)))))
 
 ;;アイテムの画像
 (defun item-img (item)
@@ -805,19 +790,18 @@
 	(endtime *p*) (get-internal-real-time)))
 
 ;;死んだ敵の情報を消す
-(defun delete-enemies (g)
-  (with-slots (players donjons) g
-    (let ((stage-list (remove-duplicates (mapcar #'stage players))))
-      (loop for s in stage-list
-	 do (let ((donjon (aref donjons s)))
-	      (loop for e in (donjon-enemies donjon)
-		 do (when (and (null (dmg e))
-			       (dead e))
-		      ;; (when (eq (obj-type e) :boss)
-		      ;;   (go-ending))
-		      (enemy-drop-item e g s)
-		      (setf (donjon-enemies donjon)
-			    (remove e (donjon-enemies donjon) :test #'equal)))))))))
+(defun delete-enemies (g stage-list)
+  (with-slots (donjons) g
+    (loop for s in stage-list
+       do (let ((donjon (aref donjons s)))
+	    (loop for e in (donjon-enemies donjon)
+	       do (when (and (null (dmg e))
+			     (dead e))
+		    (when (eq (obj-type e) :boss)
+		      (setf (clear g) t))
+		    (enemy-drop-item e g s)
+		    (setf (donjon-enemies donjon)
+			  (remove e (donjon-enemies donjon) :test #'equal))))))))
 
 
 (defun chomp (line)
@@ -835,7 +819,7 @@
 
 
 (defun make-damage-list (p)
-  `(:|x| ,(x p) :|y| ,(y p)
+  `(:|x| ,(x p) :|y| ,(y p) :|color| ,(color p)
      :|dmg-num| ,(dmg-num p)))
 
 (defun check-dmg-list (p)
@@ -878,6 +862,7 @@
 					   (donjon-blocks map)))
      :|enemies| ,(mapcar #'make-enemy-list (donjon-enemies map))
      :|item| ,(mapcar #'make-object-list (donjon-objects map))
+     :|dmg| ,(mapcar #'make-damage-list (donjon-dmgs map))
      ;;:|yuka| ,(mapcar #'make-object-list (donjon-yuka map))
   ))
 
@@ -896,7 +881,6 @@
      :|lvup-exp| ,(lvup-exp p)
      :|str| ,(str p)
      :|def| ,(def p)
-     :|dmg| ,(check-dmg-list p)
      :|hammer| ,(hammer p)
      :|w| ,(w p)
      :|h| ,(h p)
@@ -1091,9 +1075,13 @@
     ;; イベントリストはブロードキャストごとにクリアする。
     (setf (events g) nil)))
 
+(defun player-rank (rp)
+  `(:|name| ,(name rp)
+     :|totaldmg| ,(totaldmg rp)))
 
 (defun make-ranking-data (g)
-  :[])
+  (loop for rp in (players g)
+       collect (player-rank rp)))
 
 (defun game-broadcast-result (g)
   (game-broadcast-message
@@ -1233,18 +1221,23 @@
 ;;プレイヤーの情報更新
 (defun update-players (g)
   (dolist (p (players g))
-    (update-player p g)
-    (update-damage-font p)))
+    (update-player p g)))
 
 
 (defun update-game (g)
-  (update-players g)
-  (update-enemies g)
-  (delete-enemies g))
+  (with-slots (players) g
+    (let ((stage-list (remove-duplicates (mapcar #'stage players))))
+      (update-players g)
+      (update-enemies g stage-list)
+      (update-damage-fonts g stage-list)
+      (delete-enemies g stage-list))))
 
 (defun game-end? (g)
   (every #'dead (players g)))
 
+(defun game-broadcast-all-quit (g)
+  (game-broadcast-message g `(:|type| "quit")))
+ 
 (defclass server ()
   (
    (server-socket :initform (make-server-socket))
@@ -1356,38 +1349,50 @@
 
 (defmethod playing ((s server))
   (with-slots
-   (app-func g) s
+	(app-func g) s
+    (cond
+      ((clear g)
+       (v:info :game "ゲームクリア")
+       (game-broadcast-result g)
+       (game-close-connections g)
+       (setf g (new-game))
+       (setf app-func #'player-registration))
+      ((null (players g))
+       (v:info :game "プレーヤーが居なくなったためゲーム終了")
 
-   (cond
-    ((null (players g))
-     (v:info :game "プレーヤーが居なくなったためゲーム終了")
+       (setf g (new-game))
+       (setf app-func #'player-registration))
 
-     (setf g (new-game))
-     (setf app-func #'player-registration))
+      ((game-end? g)
+       (v:info :game "全員死んだ・・・")
+       ;;(game-broadcast-result g)
+       (game-broadcast-all-quit g)
+       (game-close-connections g)
 
-    ((game-end? g)
-     (v:info :game "ゲーム終了")
-     ;;(game-broadcast-result g)
-     (game-close-connections g)
+       (setf g (new-game))
+       (setf app-func #'player-registration))
 
-     (setf g (new-game))
-     (setf app-func #'player-registration))
-
-    (t
-     (try-read-remote-commands g)
-     ;;プレイヤーからの終了コマンド
-     (dolist (rp (players g))
-       (when (and (not (dead rp))
-                  (equal (command rp) "Q"))
-	 (game-kill-player  rp)
-	 (game-broadcast-quit rp)
-	 (remote-player-close-stream rp)
-	 (v:error :game "~aがやめました。" (name rp))
-	 (setf (players g) (remove rp (players g) :test #'equal))))
-     ;; ゲーム状態の更新。
-     (update-game g)
-     (game-broadcast-map g)
-     ))))
+      (t
+       (try-read-remote-commands g)
+       ;;プレイヤーからの終了コマンド
+       (dolist (rp (players g))
+	 (cond
+	   ((dead rp)
+	    (game-broadcast-quit rp)
+	    (remote-player-close-stream rp)
+	    (v:error :game "~aが死亡しました。" (name rp))
+	    (setf (players g) (remove rp (players g) :test #'equal)))
+	   ((and (not (dead rp))
+		 (equal (command rp) "Q"))
+	    (game-kill-player  rp)
+	    (game-broadcast-quit rp)
+	    (remote-player-close-stream rp)
+	    (v:error :game "~aがやめました。" (name rp))
+	    (setf (players g) (remove rp (players g) :test #'equal)))))
+       ;; ゲーム状態の更新。
+       (update-game g)
+       (game-broadcast-map g)
+       ))))
 
 (defmethod server-do-iter ((s server))
   (with-slots
