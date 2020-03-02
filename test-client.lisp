@@ -161,28 +161,28 @@
       (text-out *hmemdc* (format nil "~d" num) x y)))))
 
 ;;アニメ表示
-(defun render-enemy (obj anime-num)
-  (let* ((x (getf obj :|x|))
-         (y (getf obj :|y|))
-	 (w (getf obj :|w|))
-         (h (getf obj :|h|))
-         (dead (getf obj :|dead|))
-	 (img (getf obj :|img|))
+(defun render-enemy (objs)
+  (let* ((obj (getf objs :|data|))
+	 (x (getx obj))
+         (y (gety obj))
+	 (w (getw obj))
+         (h (geth obj))
+         (dead (getdead obj))
+	 (img (getimg obj))
+	 (anime-num (getanime-img obj))
          ;; 転送データ量節約のためにmoto-w/hがw/hと同じだった場合は省略
          ;; してあるので、moto-w/hがなければw/hの値を使う。
-	 (moto-w (or (getf obj :|moto-w|) (getf obj :|w|)))
-         (moto-h (or (getf obj :|moto-h|) (getf obj :|h|))))
-    (when (null dead) ;;死んでなかったら表示
+	 (moto-w (getmoto-w obj))
+         (moto-h (getmoto-h obj)))
+    (when (eq dead 0) ;;死んでなかったら表示
       (select-object *hogememdc* *anime-monsters-img*)
       (trans-blt x y (* moto-w img) (* *obj-h* anime-num)
 		     moto-w moto-h w h))))
 
 ;;敵表示
-(defun render-enemies (mes)
-  (let ((enemies (getf mes :|enemies|)))
-    (loop for e in enemies
-       do (let ((anime-img (getf e :|anime-img|)))
-	    (render-enemy e anime-img)))))
+(defun render-enemies (enemies)
+  (loop for e in enemies
+     do (render-enemy e)))
 
 ;;現在の方向
 (defun p-dir-num (dir)
@@ -203,81 +203,82 @@
 
 ;;攻撃時の描画
 (defun render-p-atk (obj atk-img)
-  (let* ((x (getf obj :|x|))
-         (y (getf obj :|y|))
+  (let* ((data (getf obj :|data|))
+	 (buki1 (getf obj :|buki|))
+	 (buki (getf buki1 :|data|))
+	 (x (getx data)) (y (gety data))
          (name (getf obj :|name|))
-	 (w (getf obj :|w|))
-         (h (getf obj :|h|))
-         (dir1 (getf obj :|dir|))
-	 (moto-w (or (getf obj :|moto-w|) (getf obj :|w|)))
-         (moto-h (or (getf obj :|moto-h|) (getf obj :|h|)))
-	 (img (getf obj :|img|))
-         (buki (getf obj :|buki|))
-	 (xb (getf buki :|x|))
-         (yb (getf buki :|y|)))
+	 (w (getw data)) (h (geth data))
+         (dir (getdir data))
+	 (moto-w (getmoto-w data))
+         (moto-h (getmoto-h data))
+	 (img (getimg data))
+	 (xb (getx buki))
+         (yb (gety buki)))
     (render-player-name name x y)
-    (let ((dir (p-dir-num dir1)))
-      (cond
-	((eq dir +down+)
-	 (select-object *hogememdc* *p-atk-img*)
-	 (trans-blt x y  (* w img) (* h dir) moto-w moto-h w h)
-	 (select-object *hogememdc* atk-img)
-	 (trans-blt xb yb (* w img) (* h dir) moto-w moto-h w h))
-	(t
-	 (select-object *hogememdc* atk-img)
-	 (trans-blt xb yb (* w img) (* h dir) moto-w moto-h w h)
-	 (select-object *hogememdc* *p-atk-img*)
-	 (trans-blt x y (* w img) (* h dir) moto-w moto-h w h))))))
+    (cond
+      ((eq dir +down+)
+       (select-object *hogememdc* *p-atk-img*)
+       (trans-blt x y  (* w img) (* h dir) moto-w moto-h w h)
+       (select-object *hogememdc* atk-img)
+       (trans-blt xb yb (* w img) (* h dir) moto-w moto-h w h))
+      (t
+       (select-object *hogememdc* atk-img)
+       (trans-blt xb yb (* w img) (* h dir) moto-w moto-h w h)
+       (select-object *hogememdc* *p-atk-img*)
+       (trans-blt x y (* w img) (* h dir) moto-w moto-h w h)))))
   
 ;;プレイヤー表示
-(defun render-player (obj)
-  (let ((atk-now (getf obj :|atk-now|))
-	(hammer-now (getf obj :|hammer-now|)))
+(defun render-player (obj name)
+  (let* ((data (getf obj :|data|))
+	 (atk-now (getatk-now data))
+	 (hammer-now (gethammer-now data)))
     (cond
-      (atk-now
+      ((eq atk-now 1)
        (render-p-atk obj *buki-img*))
-      (hammer-now
+      ((eq hammer-now 1)
        (render-p-atk obj *hammer-img*))
       (t
-       (let ((x (getf obj :|x|))
-             (y (getf obj :|y|))
-             (name (getf obj :|name|))
-	     (w (getf obj :|w|))
-             (h (getf obj :|h|))
-             (dir (getf obj :|dir|))
-	     (moto-w (or (getf obj :|moto-w|) (getf obj :|w|)))
-             (moto-h (or (getf obj :|moto-h|) (getf obj :|h|)))
-	     (img (getf obj :|img|)))
+       (let ((x (getx data))
+             (y (gety data))
+	     (w (getw data))
+             (h (geth data))
+             (dir (getdir data))
+	     (moto-w (getmoto-w data))
+             (moto-h (getmoto-h data))
+	     (img (getimg data)))
+	 (v:debug :game (format nil "~d" x))
+	 (v:debug :game (format nil "~d" y))
 	 (render-player-name name x y)
 	 (select-object *hogememdc* *p-img*)
-	 (trans-blt x y (* moto-w img) (* moto-h (p-dir-num dir))
+	 (trans-blt x y (* moto-w img) (* moto-h dir)
 			moto-w moto-h w h))))))
 
 ;;*objs-img*の描画
-(defun render-objs-img (obj)
-  (let ((x (getf obj :|x|))
-        (y (getf obj :|y|))
-	(w (getf obj :|w|))
-        (h (getf obj :|h|))
-	(moto-w (or (getf obj :|moto-w|) (getf obj :|w|)))
-        (moto-h (or (getf obj :|moto-h|) (getf obj :|h|)))
-	(img (getf obj :|img|)))
+(defun render-objs-img (objs)
+  (let* ((obj (getf objs :|data|))
+	 (x (getx obj))
+	 (y (gety obj))
+	 (w (getw obj))
+	 (h (geth obj))
+	 (moto-w (getmoto-w obj))
+	 (moto-h (getmoto-h obj))
+	 (img (getimg obj)))
     (select-object *hogememdc* *objs-img*)
     (trans-blt x y (* moto-w img) 0
 		   moto-w moto-h w h)))
 
 ;;プレイヤーのステータス表示
-(defun render-p-status (p)
+(defun render-p-status (p name)
   (let* ((num 10)
-         (name (getf p :|name|))
-	 (level (getf p :|level|))
-         (hp (getf p :|hp|))
-	 (maxhp (getf p :|maxhp|))
-         (str (getf p :|str|))
-	 (def (getf p :|def|))
-         (exp (getf p :|exp|))
-	 (lvupexp (getf p :|lvup-exp|))
-         (hammer (getf p :|hammer|)))
+	 (level (getlevel p))
+         (hp (gethp p))
+	 (maxhp (getmaxhp p))
+         (str (getstr p))
+	 (def (getdef p))
+         (exp (getexp p))
+	 (lvupexp (getlvup-exp p))
+         (hammer (gethammer p)))
     (macrolet ((hoge (n)
 		 `(incf ,n 25)))
       (select-object *hmemdc* *font30*)
@@ -295,10 +296,10 @@
       ;;;(text-out *hmemdc* (format nil "モゲアーガの塔 ~2,'0d階" (stage *p*)) 10 (+ *map-h* 10)))))
       ;;(text-out *hmemdc* (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 200 (+ *map-h* 10))))))
 
-(defun render-other-p-status (p x)
-  (let* ((num (+ *map-h* 10)) (name (getf p :|name|))
-	 (level (getf p :|level|)) (hp (getf p :|hp|))
-	 (maxhp (getf p :|maxhp|)) (str (getf p :|str|)))
+(defun render-other-p-status (p x name)
+  (let* ((num (+ *map-h* 10))
+	 (level (getlevel p)) (hp (gethp p))
+	 (maxhp (getmaxhp p)) (str (getstr p)))
     (macrolet ((hoge (n)
 		 `(incf ,n 25)))
       (select-object *hmemdc* *font30*)
@@ -313,29 +314,31 @@
 (defun render-players (players now-stage)
   (let ((x 0))
     (dolist (player players)
-      (if (= *id* (getf player :|id|))
-	  (render-p-status player)
-	  (progn
-	   (render-other-p-status player x)
-	   (incf x)))
-      (when (= (getf player :|stage|) now-stage)
-	(render-player player)))))
+      (let ((p-data (getf player :|data|))
+	    (name (getf player :|name|)))
+	(if (= *id* (getid p-data))
+	    (render-p-status p-data name)
+	    (progn
+	      (render-other-p-status player x name)
+	      (incf x)))
+	(when (= (getstage p-data) now-stage)
+	  (render-player player name))))))
 
 (defun render-objects (objs)
   (loop for obj in objs
         do (render-objs-img obj)))
 
 ;;ブロック描画
-(defun render-block (mes)
-  (render-objects (getf mes :|blocks|)))
+(defun render-block (blocks)
+  (render-objects blocks))
 
 ;;床描画
 (defun render-yuka (mes)
   (render-objects (getf mes :|yuka|)))
 
 ;;鍵とか描画
-(defun render-item (mes)
-  (render-objects (getf mes :|item|)))
+(defun render-item (items)
+  (render-objects items))
 
 ;;バックグラウンド
 (defun render-background ()
@@ -345,7 +348,7 @@
 ;;HPバー表示
 (defun render-hpbar (e hp maxhp)
   (let* ((len (floor (* (/ hp maxhp) *hpbar-max*)))
-	 (x (getf e :|x|)) (y (getf e :|y|))
+	 (x (getx e)) (y (gety e))
 	 (hp-w (+ x len)))
     ;;残りHP
     (select-object *hmemdc* (aref *brush* +green+))
@@ -355,13 +358,14 @@
     (rectangle *hmemdc* hp-w (- y 15) (+ hp-w (- *hpbar-max* len)) y)))
 
 ;;ダメージ表示
-(defun render-damage (dmg)
-  (let ((color (if (equal "WHITE" (getf dmg :|color|))
-		   (encode-rgb 255 255 255)
-		   (encode-rgb 255 124 0)))
-	(dmg-num (getf dmg :|dmg-num|))
-	(x (getf dmg :|x|))
-	(y (getf dmg :|y|)))
+(defun render-damage (dmgs)
+  (let* ((dmg (getf dmgs :|data|))
+	 (color (if (eq 1 (getcolor dmg))
+		    (encode-rgb 255 255 255)
+		    (encode-rgb 255 124 0)))
+	 (dmg-num (getdmg-num dmg))
+	 (x (getx dmg))
+	 (y (gety dmg)))
     (select-object *hmemdc* *font20*)
     (set-bk-mode *hmemdc* :transparent)
     ;;縁取り
@@ -376,20 +380,19 @@
     ))
 
 ;;全てのダメージ表示
-(defun render-all-damage (donjon)
-  (let ((dmgs (getf donjon :|dmg|)))
-    (dolist (dmg dmgs)
-      (render-damage dmg))))
+(defun render-all-damage (dmgs)
+  (dolist (dmg dmgs)
+    (render-damage dmg)))
 
 ;;HPバー表示
-(defun render-all-hpbar (donjon)
-  (let ((enemies (getf donjon :|enemies|)))
-    (dolist (e enemies)
-      (let ((maxhp (getf e :|maxhp|))
-	    (hp (getf e :|hp|)) (dead (getf e :|dead|)))
-	(when (and (/= maxhp hp)
-		   (null dead))
-	  (render-hpbar e hp maxhp))))))
+(defun render-all-hpbar (enemies)
+  (dolist (e1 enemies)
+    (let* ((e (getf e1 :|data|))
+	   (maxhp (getmaxhp e))
+	   (hp (gethp e)) (dead (getdead e)))
+      (when (and (/= maxhp hp)
+		 (eq dead 0))
+	(render-hpbar e hp maxhp)))))
 
 (defvar *backgrounds* nil)
 
@@ -400,18 +403,23 @@
         (setf *backgrounds* (coerce backgrounds 'vector))))
 
   (let* ((players (getf mes :|players|))
-	 (mine (find *id* players :key #'(lambda (x) (getf x :|id|))))
-	 (now-stage (getf mine :|stage|))
-	 (donjon (getf mine :|donjon|)))
+	 (mine (find *id* players :key #'(lambda (x) (getid (getf x :|data|)))))
+	 (mine-data (getf mine :|data|))
+	 (now-stage (getstage mine-data))
+	 (donjon (getf mine :|donjon|))
+	 (blocks (getf donjon :|blocks|))
+	 (item (getf donjon :|item|))
+	 (dmg (getf donjon :|dmg|))
+	 (enemies (getf donjon :|enemies|)))
     (render-background)
     (render-objects (getf (aref *backgrounds* (1- now-stage)) :|yuka|))
     (render-objects (getf (aref *backgrounds* (1- now-stage)) :|blocks|)) ; hard-block
-    (render-block donjon) ; soft-block
-    (render-item donjon)
-    (render-enemies donjon)
+    (render-block blocks) ; soft-block
+    (render-item item)
+    (render-enemies enemies)
     (render-players players now-stage)
-    (render-all-damage donjon)
-    (render-all-hpbar donjon)
+    (render-all-damage dmg)
+    (render-all-hpbar enemies)
     (render-events (getf mes :|events|))))
 
 (defun render-events (events)
@@ -471,10 +479,12 @@
       (let ((str (babel:octets-to-string (gzip-stream:gunzip-sequence buf) :encoding :utf-8)))
         ;;(v:debug :network str)
         (let ((diff (jonathan:parse str :as :plist)))
+	  ;;(v:debug :network (getf diff :players))
 	  (setf *lastmsg* (diff:patch *lastmsg* diff))
 	  *lastmsg*)))))
 
 (defun message-type (message)
+  ;;(car message))
   (getf message :|type|))
 
 ;;mes表示
@@ -564,19 +574,20 @@
 	 (send-message hwnd (const +wm-close+) nil nil))))))
 
 (defun display-status (status-message)
-  (let ((players (getf (getf status-message :|map|) :|players|))
-	(num 30))
+  (let* ((players (getf (getf status-message :|map|) :|players|))
+	 (num 30))
     (macrolet ((incf40 (n)
 		 `(incf ,n 40)))
       (render-background)
       (do-msg (format nil "受付完了：ゲーム開始待ち中") 100 num *font40*)
       (do-msg (format nil "Enterで準備完了") 100 (incf40 num) *font40*)
-      (do-msg (format nil "参加者待ち(開始まで~a秒)" (getf status-message :|timeout-seconds|))
+      (do-msg (format nil "参加者待ち(開始まで~a秒)"  (getf status-message :|timeout-seconds|))
 	100 (incf40 num) *font40*)
       (do-msg "参加プレーヤー:" 100 (incf40 num) *font40*)
       (dolist (p players)
-	(let* ((ready? (getf p :|ready?|))
-	       (msg (if ready? "準備完了" "準備中")))
+	(let* ((data (getf p :|data|))
+	       (ready? (getready data))
+	       (msg (if (eq ready? 1) "準備完了" "準備中")))
 	  (do-msg (format nil  "~a:~a~%" (getf p :|name|) msg)
 	    100 (incf40 num) *font40*))))))
 
@@ -615,32 +626,31 @@
       (enter "ENTER")
       (t "STAY"))))
 
-;;プレイ中のループ
+;;プレイ中のループ status 0 playing 1 result 2 end 3 quit 4
 (defun wait-game-start ()
   (if (listen *stream*)
       (progn
 	(let* ((message (read-message *stream*))
 	       (type (message-type message)))
 	  (cond
-	    ((string= type "status")
+	    ((eq type 0)
 	     (display-status message)
 	     (when (not (equal *command* (keystate->command)))
                (setf *command* (keystate->command))
                (format *stream* "~a~%" *command*)
                (force-output *stream*)))
-	    ((string= type "playing")
+	    ((eq type 1)
 	     (render-map message)
-
              (when (not (equal *command* (keystate->command)))
                (setf *command* (keystate->command))
                (format *stream* "~a~%" *command*)
                (force-output *stream*)))
-	    ((string= type "result")
+	    ((eq type 2)
 	     (render-result message)
 	     (setf *game-state* :result))
-	    ((string= type "end")
+	    ((eq type 3)
 	     (init-parameter))
-	    ((string= type "quit")
+	    ((eq type 4)
 	     (init-parameter))
 	    (t
 	     (error (format nil "予期しないメッセージタイプ: ~s"

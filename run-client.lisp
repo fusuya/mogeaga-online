@@ -12,5 +12,6 @@
 (load "mogeaga-client.lisp" :external-format :cp932)
 
 (defun main ()
-  (setf (v:repl-level) :debug)
+  ;;(setf (v:repl-level) :debug)
   (moge::moge))
+

@@ -30,6 +30,7 @@
 (defconstant +left+ 2)
 (defconstant +right+ 3)
 (defconstant +up+ 1)
+(defconstant +stop+ 4)
 
 ;;敵画像切り替えよう
 (defconstant +brigand-anime+ 0)
@@ -261,7 +262,7 @@
    (race      :accessor race      :initform nil   :initarg :race)    ;;種族  0:プレイヤー 1:オーク 2:スライム 3:ヒドラ 4:ブリガンド 5 メテルヨテイチ
    (walk-c    :accessor walk-c    :initform 0     :initarg :walk-c)  ;;歩行アニメカウンター
    (walk-func :accessor walk-func :initform #'+   :initarg :walk-func)
-   (dir       :accessor dir       :initform :down :initarg :dir)     ;;現在の方向
+   (dir       :accessor dir       :initform +down+ :initarg :dir)     ;;現在の方向
    (dir-c     :accessor dir-c     :initform 0     :initarg :dir-c)   ;;方向転換用カウンター
    (atk-now   :accessor atk-now   :initform nil   :initarg :atk-now) ;;攻撃中か
    (atk-c     :accessor atk-c     :initform 0     :initarg :atk-c)   ;;攻撃モーション更新用
@@ -315,8 +316,145 @@
    (events     :accessor events      :initform nil :initarg :events)
    (clear      :accessor clear       :initform nil :initarg :clear)))
 
+;;----------------------------------------------------
+
+(defmacro addx (hoge  x)
+  `(setf ,hoge (logior ,hoge (ash ,x 0))))
+
+(defmacro getx (hoge)
+  `(logand (ash ,hoge 0) #b1111111111))
+
+(defmacro addy (hoge y)
+  `(setf ,hoge (logior ,hoge (ash ,y 10))))
+
+(defmacro gety (hoge)
+  `(logand (ash ,hoge -10) #b1111111111))
+
+;;----------------------------------------------------
+;;ダメージ用
+(defmacro addcolor (hoge color) ;; 1
+  `(setf ,hoge (logior ,hoge (ash ,color 20))))
+(defmacro getcolor (hoge)
+  `(logand (ash ,hoge -20) #b1))
+
+(defmacro adddmg-num (hoge dmg-num) ;; 7
+  `(setf ,hoge (logior ,hoge (ash ,dmg-num 21))))
+(defmacro getdmg-num (hoge)
+  `(logand (ash ,hoge -21) #b1111111))
+
+;;----------------------------------------------------
+;; object and enemy and player 共通
+(defmacro addw (hoge w) ;; 7 
+  `(setf ,hoge (logior ,hoge (ash ,w 20))))
+(defmacro getw (hoge)
+  `(logand (ash ,hoge -20) #b1111111))
+
+(defmacro addh (hoge h) ;; 7
+  `(setf ,hoge (logior ,hoge (ash ,h 27))))
+(defmacro geth (hoge)
+  `(logand (ash ,hoge -27) #b1111111))
+
+(defmacro addmoto-w (hoge moto-w) ;; 7 
+  `(setf ,hoge (logior ,hoge (ash ,moto-w 34))))
+(defmacro getmoto-w (hoge)
+  `(logand (ash ,hoge -34) #b1111111))
+
+(defmacro addmoto-h (hoge moto-h) ;; 7
+  `(setf ,hoge (logior ,hoge (ash ,moto-h 41))))
+(defmacro getmoto-h (hoge)
+  `(logand (ash ,hoge -41) #b1111111))
+
+(defmacro addimg (hoge img) ;; 4
+  `(setf ,hoge (logior ,hoge (ash ,img 48))))
+(defmacro getimg (hoge)
+  `(logand (ash ,hoge -48) #b1111))
+;;----------------------------------------------------
+;; enemy and player 共通
+(defmacro addhp (hoge hp) ;; 7 
+  `(setf ,hoge (logior ,hoge (ash ,hp 55))))
+(defmacro gethp (hoge)
+  `(logand (ash ,hoge -55) #b1111111))
+
+(defmacro addmaxhp (hoge maxhp) ;; 7
+  `(setf ,hoge (logior ,hoge (ash ,maxhp 62))))
+(defmacro getmaxhp (hoge)
+  `(logand (ash ,hoge -62) #b1111111))
+
+(defmacro adddir (hoge img) ;; 3
+  `(setf ,hoge (logior ,hoge (ash ,img 69))))
+(defmacro getdir (hoge)
+  `(logand (ash ,hoge -69) #b111))
+
+(defmacro adddead (hoge dead) ;; 1
+  `(setf ,hoge (logior ,hoge (ash ,dead 72))))
+(defmacro getdead (hoge)
+  `(logand (ash ,hoge -72) #b1))
+
+;;----------------------------------------------------
+;; enemy
+(defmacro addanime-img (hoge anime-img) ;; 4 
+  `(setf ,hoge (logior ,hoge (ash ,anime-img 73))))
+(defmacro getanime-img (hoge)
+  `(logand (ash ,hoge -73) #b1111))
+;;----------------------------------------------------
+;; player
+(defmacro addid (hoge id) ;; 3 
+  `(setf ,hoge (logior ,hoge (ash ,id 73))))
+(defmacro getid (hoge)
+  `(logand (ash ,hoge -73) #b111))
+
+(defmacro addlevel (hoge level) ;; 5 
+  `(setf ,hoge (logior ,hoge (ash ,level 76))))
+(defmacro getlevel (hoge)
+  `(logand (ash ,hoge -76) #b11111))
+
+(defmacro addexp (hoge exp) ;; 8 
+  `(setf ,hoge (logior ,hoge (ash ,exp 81))))
+(defmacro getexp (hoge)
+  `(logand (ash ,hoge -81) #b11111111))
+
+(defmacro addlvup-exp (hoge lvup-exp) ;; 8 
+  `(setf ,hoge (logior ,hoge (ash ,lvup-exp 89))))
+(defmacro getlvup-exp (hoge)
+  `(logand (ash ,hoge -89) #b11111111))
+
+(defmacro addstage (hoge stage) ;; 5 
+  `(setf ,hoge (logior ,hoge (ash ,stage 97))))
+(defmacro getstage (hoge)
+  `(logand (ash ,hoge -97) #b11111))
+
+(defmacro addstr (hoge str) ;; 6
+  `(setf ,hoge (logior ,hoge (ash ,str 102))))
+(defmacro getstr (hoge)
+  `(logand (ash ,hoge -102) #b111111))
+
+(defmacro adddef (hoge def) ;; 6 
+  `(setf ,hoge (logior ,hoge (ash ,def 108))))
+(defmacro getdef (hoge)
+  `(logand (ash ,hoge -108) #b111111))
+
+(defmacro addhammer (hoge hammer) ;; 5 
+  `(setf ,hoge (logior ,hoge (ash ,hammer 114))))
+(defmacro gethammer (hoge)
+  `(logand (ash ,hoge -114) #b11111))
+
+(defmacro addready (hoge ready) ;; 1 
+  `(setf ,hoge (logior ,hoge (ash ,ready 119))))
+(defmacro getready (hoge)
+  `(logand (ash ,hoge -119) #b1))
+
+(defmacro addatk-now (hoge atk-now) ;; 1 
+  `(setf ,hoge (logior ,hoge (ash ,atk-now 120))))
+(defmacro getatk-now (hoge)
+  `(logand (ash ,hoge -120) #b1))
+
+(defmacro addhammer-now (hoge hammer-now) ;; 1 
+  `(setf ,hoge (logior ,hoge (ash ,hammer-now 121))))
+(defmacro gethammer-now (hoge)
+  `(logand (ash ,hoge -121) #b1))
 
 
+;;----------------------------------------------------
 
 (defun AddDest (move)
   (ash move 0))
