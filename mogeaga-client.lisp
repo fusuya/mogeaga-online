@@ -291,9 +291,11 @@
       (text-out *hmemdc* (format nil "exp") (+ *map-w* 10) (hoge num))
       (text-out *hmemdc* (format nil "~3d/~3d" exp lvupexp) (+ *map-w* 10) (hoge num))
       (text-out *hmemdc* (format nil "ハンマー") (+ *map-w* 10) (hoge num))
-      (text-out *hmemdc* (format nil "残り:~d回" hammer) (+ *map-w* 10) (hoge num)))))
-      ;;;(text-out *hmemdc* (format nil "モゲアーガの塔 ~2,'0d階" (stage *p*)) 10 (+ *map-h* 10)))))
-      ;;(text-out *hmemdc* (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 200 (+ *map-h* 10))))))
+      (text-out *hmemdc* (format nil "残り:~d回" hammer) (+ *map-w* 10) (hoge num))
+      (text-out *hmemdc* (format nil "~d" *change-screen-w*) (+ *map-w* 10) (hoge num))
+      (text-out *hmemdc* (format nil "~d" *change-screen-h*) (+ *map-w* 10) (hoge num)))))
+      ;; (text-out *hmemdc* (format nil "モゲアーガの塔 ~2,'0d階" (stage *p*)) 10 (+ *map-h* 10))
+      ;; (text-out *hmemdc* (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 200 (+ *map-h* 10))))))
 
 (defun render-other-p-status (p x)
   (let* ((num (+ *map-h* 10)) (name (getf p :|name|))
@@ -340,7 +342,7 @@
 ;;バックグラウンド
 (defun render-background ()
   (select-object *hmemdc* (get-stock-object :black-brush))
-  (rectangle *hmemdc* 0 0 *change-screen-w* *change-screen-h*))
+  (rectangle *hmemdc* 0 0 (rect-right *c-rect*) (rect-bottom *c-rect*)));;*change-screen-w* *change-screen-h*))
 
 ;;HPバー表示
 (defun render-hpbar (e hp maxhp)
@@ -452,7 +454,8 @@
 (defun render-game (hdc)
   (transparent-blt hdc 0 0 *hmemdc* 0 0
 		   :width-dest *change-screen-w* :height-dest *change-screen-h*
-		   :width-source (rect-right *c-rect*) :height-source (rect-bottom *c-rect*) 
+		   :width-source (rect-right *c-rect*)
+		   :height-source (rect-bottom *c-rect*) 
 		   :transparent-color (encode-rgb 0 255 0)))
 
 (defun decode-u32 (arr)
@@ -523,7 +526,7 @@
 
 	(setf *id* (parse-integer (read-line *stream*)))
 
-	(do-msg "受付完了：ゲーム開始待ち中" 100 100 *font40*)
+	;;(do-msg "受付完了：ゲーム開始待ち中" 100 100 *font40*)
 
 	(setf *game-state* :wait-game-start))
       (progn
@@ -638,8 +641,12 @@
 	    ((string= type "result")
 	     (render-result message)
 	     (setf *game-state* :result))
-	    ((string= type "end")
-	     (init-parameter))
+	    ((string= type "dead")
+	     (init-parameter)
+	     (setf *game-state* :dead))
+	    ((string= type "stop")
+	     (init-parameter)
+	     (setf *game-state* :stop))
 	    ((string= type "quit")
 	     (init-parameter))
 	    (t
@@ -660,24 +667,31 @@
     (:result
      (input-reslut-gamen hwnd))
     (:playing)
-    (:dead)
+    (:dead
+     (render-title-gamen "ゲームオーバー" "もう一回")
+     (update-title-and-ending-gamen hwnd))
+    (:stop
+     (render-title-gamen "他の人がプレイ中" "もう一回")
+     (update-title-and-ending-gamen hwnd))
     (:ending))
   (invalidate-rect hwnd nil nil))
 
 ;;ウィンドウサイズ変更時に画像拡大縮小する
 (defun change-screen-size (lp)
+  ;; (setf *change-screen-w* (rect-right lp)
+  ;; 	*change-screen-h* (rect-bottom lp)))
   (let* ((change-w (loword lp))
-	 (change-h (hiword lp)))
+  	 (change-h (hiword lp)))
     (setf *change-screen-w* change-w
-	  *change-screen-h* change-h)))
+  	  *change-screen-h* change-h)))
 
 ;;クライアント領域を*client-w* *client-h*に設定
 (defun set-client-size (hwnd)
   (let* ((rc (get-client-rect hwnd))
          (rw (get-window-rect hwnd))
-         (new-w (+ *client-w* (- (- (rect-right rw) (rect-left rw))
+         (new-w (+ *screen-w* (- (- (rect-right rw) (rect-left rw))
                                (- (rect-right rc) (rect-left rc)))))
-         (new-h (+ *client-h* (- (- (rect-bottom rw) (rect-top rw))
+         (new-h (+ *screen-h* (- (- (rect-bottom rw) (rect-top rw))
                                (- (rect-bottom rc) (rect-top rc))))))
     (set-window-pos hwnd nil 0 0 new-w new-h '(:no-move :no-zorder))))
 
@@ -690,7 +704,7 @@
      (load-images)
      (init-parameter)
      (set-name-and-addr)
-     ;;(set-client-size hwnd)
+     (set-client-size hwnd)
      (setf *c-rect* (get-client-rect hwnd))
      ;;(setf *screen-w* (rect-right *c-rect*)
 	;;   *screen-h* (rect-bottom *c-rect*))

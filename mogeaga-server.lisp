@@ -1094,9 +1094,9 @@
 			       :|map| ,(make-donjon-data g))))
 
 
-(defun game-broadcast-quit (rp)
+(defun game-broadcast-quit (rp mes)
   (handler-case
-      (remote-player-send-message rp `(:|type| "quit"))
+      (remote-player-send-message rp `(:|type| ,mes))
     (sb-int:simple-stream-error
 	(c)
       (declare (ignore c))
@@ -1349,7 +1349,24 @@
 
 (defmethod playing ((s server))
   (with-slots
-	(app-func g) s
+	(app-func g server-socket) s
+    ;;途中追加みたいなのtodo
+    (let* ((client (socket-accept server-socket)))
+      (when client
+	(let* ((stream (socket-make-stream client
+                                          :input t
+                                          :output t
+                                          :element-type '(unsigned-byte 8)
+                                          :timeout +client-read-timeout+))
+	       (rp (make-instance 'remote-player :stream1 stream :socket1 client)))
+	  (remote-player-receive-name rp)
+	  (game-add-player g rp)
+	  (v:error :game "~aがきたけど帰した" (name rp) )
+	  (remote-player-send-id rp)
+	  (game-broadcast-quit rp "stop")
+	  (setf (players g) (remove rp (players g) :test #'equal))
+	  (remote-player-close-stream rp)
+	  )))
     (cond
       ((clear g)
        (v:info :game "ゲームクリア")
@@ -1378,14 +1395,14 @@
        (dolist (rp (players g))
 	 (cond
 	   ((dead rp)
-	    (game-broadcast-quit rp)
+	    (game-broadcast-quit rp "dead")
 	    (remote-player-close-stream rp)
 	    (v:error :game "~aが死亡しました。" (name rp))
 	    (setf (players g) (remove rp (players g) :test #'equal)))
 	   ((and (not (dead rp))
 		 (equal (command rp) "Q"))
 	    (game-kill-player  rp)
-	    (game-broadcast-quit rp)
+	    (game-broadcast-quit rp "quit")
 	    (remote-player-close-stream rp)
 	    (v:error :game "~aがやめました。" (name rp))
 	    (setf (players g) (remove rp (players g) :test #'equal)))))
