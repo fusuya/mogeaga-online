@@ -183,7 +183,10 @@
 
 (my-enum +boots+ +door+ +hammer+ +hard-block+ +key+ +potion+ +soft-block+ +yuka+ +sword+ +cursor+ +kaidan+)
 
-(my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ )
+(my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)
+
+(my-enum +status+ +playing+ +result+ +dead+ +stop-entry+ +quit+ +error+)
+;;(my-enum +red+ +white+)
 
 (defclass keystate ()
   ((right :accessor right :initform nil :initarg :right)

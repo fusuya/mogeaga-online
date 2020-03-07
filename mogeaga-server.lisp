@@ -168,10 +168,12 @@
 	   (dmg (make-instance 'dmg-font :x dmg-x :y dmg-y :dmg-num  dmg-num
 			       :y-dir :up :x-dir x-dir
 			       :color (if (eq (type-of defender) 'remote-player)
-					  :red :white)
+					  +red+ +white+)
 			       :maxy dmg-y :miny (- dmg-y 15))))
-      (decf (hp defender) dmg-num) ;;hpを減らす
-      (when (>= 0 (hp defender)) ;; hpが0以下になったら死亡
+      (if (> (hp defender) dmg-num) ;;hpを減らす
+	  (decf (hp defender) dmg-num)
+	  (setf (hp defender) 0))
+      (when (= 0 (hp defender)) ;; hpが0以下になったら死亡
 	(setf (dead defender) t)
 	(when (eq (type-of atker) 'remote-player)
 	  (incf (totaldmg atker) dmg-num)
@@ -204,15 +206,19 @@
 ;;武器の画像を設定
 (defun set-buki-pos (p)
   (with-slots (buki x y dir) p
-    (case dir
-      (:down  (setf (x buki) x
-		    (y buki) (+ y 20)))
-      (:up    (setf (x buki) x
-		    (y buki) (- y 20)))
-      (:left  (setf (x buki) (- x 18)
-		    (y buki) y))
-      (:right (setf (x buki) (+ x 18)
-		    (y buki) y)))))
+    (cond
+      ((eq dir +down+)
+       (setf (x buki) x
+	     (y buki) (+ y 20)))
+      ((eq dir +up+)
+       (setf (x buki) x
+	     (y buki) (- y 20)))
+      ((eq dir +left+)
+       (setf (x buki) (- x 18)
+	     (y buki) y))
+      ((eq dir +right+)
+       (setf (x buki) (+ x 18)
+	     (y buki) y)))))
 
 ;;方向　キャラの攻撃画像
 (defun set-atk-img (p)
@@ -257,7 +263,8 @@
 		;;    (img kabe) +yuka+)))
       (when hit?
 	;;(game-play-sound *atk-block-wav*)
-	(decf (hammer p))))))
+	(when (>= (hammer p) 1)
+	  (decf (hammer p)))))))
 
 ;;画像右側めりこみ判定
 (defun merikomi-hantei (g p)
@@ -295,64 +302,61 @@
     
 ;;ランダム方向へ移動 '(:up :down :right :left :stop)
 (defun set-rand-dir (g e)
-  (loop for d in (rand-dir '(:up :down :right :left :stop) nil)
-     do (case d
-	  (:stop (setf (dir e) :stop)
-		 (return))
-	  (:up
+  (loop for d in (rand-dir `(,+up+ ,+down+ ,+right+ ,+left+ +stop+) nil)
+     do (cond 
+	  ((eq d +stop+)
+	   (setf (dir e) +stop+)
+	   (return))
+	  ((eq d +up+)
 	   (decf (y e))
 	   (if (block-hit-p g e)
 	       (incf (y e))
-	       (progn (setf (dir e) :up)
+	       (progn (setf (dir e) +up+)
 		      (return))))
-	  (:down
+	  ((eq d +down+)
 	   (incf (y e))
 	   (if (block-hit-p g e)
 	       (decf (y e))
-	       (progn (setf (dir e) :down)
+	       (progn (setf (dir e) +down+)
 		      (return))))
-	  (:right
+	  ((eq d +right+)
 	   (incf (x e))
 	   (if (block-hit-p g e)
 	       (decf (x e))
-	       (progn (setf (dir e) :right)
+	       (progn (setf (dir e) +right+)
 		      (return))))
-	  (:left
+	  ((eq d +left+)
 	   (decf (x e))
 	   (if (block-hit-p g e)
 	       (incf (x e))
-	       (progn (setf (dir e) :left)
+	       (progn (setf (dir e) +left+)
 		      (return)))))))
 
-;;スライムの移動
-(defun update-boss-pos (g e)
-  (case (dir e)
-    (:stop )
-    (:up    (decf (y e) (ido-spd e)))
-    (:down  (incf (y e) (ido-spd e)))
-    (:right (incf (x e) (ido-spd e)))
-    (:left  (decf (x e) (ido-spd e)))))
+
 
 ;;敵の移動
 (defun update-enemy-pos (g e)
-  (case (dir e)
-    (:stop )
-    (:up    (decf (y e) (ido-spd e))
-	    (let ((kabe  (block-hit-p g e)))
-	      (when kabe
-		(setf (y e) (+ (y kabe) (h kabe)))
-		(set-rand-dir g e))))
-    (:down  (incf (y e) (ido-spd e))
-	    (let ((kabe  (block-hit-p g e)))
-	      (when kabe
-		(setf (y e) (- (y kabe) (h e)))
-		(set-rand-dir g e))))
-    (:right (incf (x e) (ido-spd e))
-	    (let ((kabe  (block-hit-p g e)))
-	      (when kabe
-		(setf (x e) (- (x kabe) (w e)))
-		(set-rand-dir g e))))
-    (:left  (decf (x e) (ido-spd e))
+  (cond
+    ((eq (dir e) +up+)
+     (decf (y e) (ido-spd e))
+     (let ((kabe  (block-hit-p g e)))
+       (when kabe
+	 (setf (y e) (+ (y kabe) (h kabe)))
+	 (set-rand-dir g e))))
+    ((eq (dir e) +down+)
+     (incf (y e) (ido-spd e))
+     (let ((kabe  (block-hit-p g e)))
+       (when kabe
+	 (setf (y e) (- (y kabe) (h e)))
+	 (set-rand-dir g e))))
+    ((eq (dir e) +right+)
+     (incf (x e) (ido-spd e))
+     (let ((kabe  (block-hit-p g e)))
+       (when kabe
+	 (setf (x e) (- (x kabe) (w e)))
+	 (set-rand-dir g e))))
+    ((eq (dir e) +left+)
+     (decf (x e) (ido-spd e))
 	    (let ((kabe  (block-hit-p g e)))
 	      (when kabe
 		(setf (x e) (+ (x kabe) (w kabe)))
@@ -371,20 +375,20 @@
 	  (cond
 	    ((and (>= diffx 0) (>= diffy 0))
 	     (if (>= absx absy)
-		 (setf ret :left)
-		 (setf ret :up)))
+		 (setf ret +left+)
+		 (setf ret +up+)))
 	    ((and (>= diffx 0) (> 0 diffy))
 	     (if (>= absx absy)
-		 (setf ret :left)
-		 (setf ret :down)))
+		 (setf ret +left+)
+		 (setf ret +down+)))
 	    ((and (> 0 diffx) (>= diffy 0))
 	     (if (>= absx absy)
-		 (setf ret :right )
-		 (setf ret :up)))
+		 (setf ret +right+)
+		 (setf ret +up+)))
 	    ((and (> 0 diffx) (> 0 diffy))
 	     (if (>= absx absy)
-		 (setf ret :right)
-		 (setf ret :down)))))
+		 (setf ret +right+)
+		 (setf ret +down+)))))
 	(when ret
 	  (return-from enemy-can-atk? ret))))
     ret))
@@ -417,11 +421,11 @@
 
 ;;攻撃エフェクト出す方向
 (defun check-orc-atk-effect-dir (g e)
-  (case (dir e)
-    (:up (add-orc-atk-effect g e 0 (h e)))
-    (:down (add-orc-atk-effect g e 0 (- (h e))))
-    (:left (add-orc-atk-effect g e (w e) 0))
-    (:right (add-orc-atk-effect g e (- (w e)) 0))))
+  (cond
+    ((eq (dir e) +up+) (add-orc-atk-effect g e 0 (h e)))
+    ((eq (dir e) +down+) (add-orc-atk-effect g e 0 (- (h e))))
+    ((eq (dir e) +left+) (add-orc-atk-effect g e (w e) 0))
+    ((eq (dir e) +right+) (add-orc-atk-effect g e (- (w e)) 0))))
 
 ;;攻撃エフェクト消えるまで待つ
 (defun wait-atk-effect (e wait-time)
@@ -504,11 +508,11 @@
 
 ;;ブリガンドボールの方向
 (defun add-bri-ball-dir (g e)
-  (case (dir e)
-    (:up (add-bri-ball g e 0 20))
-    (:down (add-bri-ball g e 0 -20))
-    (:left (add-bri-ball g e 20 0))
-    (:right (add-bri-ball g e -20 0))))
+  (cond
+    ((eq (dir e) +up+) (add-bri-ball g e 0 20))
+    ((eq (dir e) +down+) (add-bri-ball g e 0 -20))
+    ((eq (dir e) +left+) (add-bri-ball g e 20 0))
+    ((eq (dir e) +right+) (add-bri-ball g e -20 0))))
 
 ;;ブリガンドの行動
 (defun update-brigand (g e)
@@ -530,15 +534,19 @@
 			     :str (str e) :anime-img +dragon-fire+
 			     :moto-w *fire-w* :moto-h *fire-h*
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
-    (case (dir e)
-      (:up (setf (x fire) (x e)
-		 (y fire) (- (y e) (* *fire-h* fire-n))))
-      (:down (setf (x fire) (x e)
-		   (y fire) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))))
-      (:right (setf (x fire) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
-		    (y fire) (y e)))
-      (:left (setf (x fire) (- (x e) (* *fire-w* fire-n))
-		   (y fire) (y e))))
+    (cond
+      ((eq (dir e) +up+)
+       (setf (x fire) (x e)
+	     (y fire) (- (y e) (* *fire-h* fire-n))))
+      ((eq (dir e) +down+)
+       (setf (x fire) (x e)
+	     (y fire) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))))
+      ((eq (dir e) +right+)
+       (setf (x fire) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
+	     (y fire) (y e)))
+      ((eq (dir e) +left+)
+       (setf (x fire) (- (x e) (* *fire-w* fire-n))
+	     (y fire) (y e))))
       
     (if (null (block-hit-p g fire)) ;;ブロックにぶつかるなら追加しない
 	(push fire (donjon-enemies (aref (donjons g) (stage e))))
@@ -555,24 +563,28 @@
 			      :str (str e) :anime-img +dragon-fire+
 			      :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			      :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
-    (case (dir e)
-      (:up (setf (x fire) (x e)
-		 (y fire) (- (y e) (* *fire-h* fire-n))
-		 (x fire2) (+ (x e) *fire-w*)
-		 (y fire2) (- (y e) (* *fire-h* fire-n))))
-      (:down (setf (x fire) (x e)
-		   (x fire2) (+ (x e) *fire-w*)
-		   (y fire) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))
-		   (y fire2) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))))
-      (:right (setf (x fire) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
-		    (x fire2) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
-		    (y fire) (y e)
-		    (y fire2) (+ (y e) *fire-h*)))
-      (:left (setf (x fire) (- (x e) (* *fire-w* fire-n))
-		   (x fire2) (- (x e) (* *fire-w* fire-n))
-		   (y fire) (y e)
-		   (y fire2) (+ (y e) *fire-h*))))
-      
+    (cond
+      ((eq (dir e) +up+)
+       (setf (x fire) (x e)
+	     (y fire) (- (y e) (* *fire-h* fire-n))
+	     (x fire2) (+ (x e) *fire-w*)
+	     (y fire2) (- (y e) (* *fire-h* fire-n))))
+      ((eq (dir e) +down+)
+       (setf (x fire) (x e)
+	     (x fire2) (+ (x e) *fire-w*)
+	     (y fire) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))
+	     (y fire2) (+ (y e) (h e) (- (* *fire-h* fire-n) *fire-h*))))
+      ((eq (dir e) +right+)
+       (setf (x fire) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
+	     (x fire2) (+ (x e) (w e) (- (* *fire-w* fire-n) *fire-w*))
+	     (y fire) (y e)
+	     (y fire2) (+ (y e) *fire-h*)))
+      ((eq (dir e) +left+)
+       (setf (x fire) (- (x e) (* *fire-w* fire-n))
+	     (x fire2) (- (x e) (* *fire-w* fire-n))
+	     (y fire) (y e)
+	     (y fire2) (+ (y e) *fire-h*))))
+    
     (if (null (block-hit-p g fire)) ;;ブロックにぶつかるなら追加しない
 	(progn (push fire (donjon-enemies (aref (donjons g) (stage e))))
 	       (push fire2 (donjon-enemies (aref (donjons g) (stage e)))))
@@ -617,14 +629,14 @@
 
 ;;ぶりボールの更新
 (defun update-briball (g e)
-  (case (dir e)
-    (:up (decf (y e)))
-    (:down (incf (y e)))
-    (:left (decf (x e)))
-    (:right (incf (x e))))
+  (cond
+    ((eq (dir e) +up+) (decf (y e)))
+    ((eq (dir e) +down+) (incf (y e)))
+    ((eq (dir e) +left+) (decf (x e)))
+    ((eq (dir e) +right+) (incf (x e))))
   (when (block-hit-p g e)
     (setf (donjon-enemies (aref (donjons g) (stage e)))
-	  (remove e (aref (donjons g) (stage e)) :test #'equal))))
+	  (remove e (donjon-enemies (aref (donjons g) (stage e))) :test #'equal))))
 
 (defun update-orc-atk-effect (g e)
   (incf (atk-c e))
@@ -666,7 +678,7 @@
      (if (> (dir-c e) 40)
 	 (progn (set-rand-dir g e)
 		(setf (dir-c e) 0))
-	 (update-boss-pos g e)))))
+	 (update-enemy-pos g e)))))
 
 ;;ボスのとげ攻撃の更新
 (defun update-toge (g e)
@@ -817,41 +829,48 @@
 (defun json-true-false (v)
   (if v t :false))
 
+(defun 1or0 (v)
+  (if v 1 0))
 
 (defun make-damage-list (p)
-  `(:|x| ,(x p) :|y| ,(y p) :|color| ,(color p)
-     :|dmg-num| ,(dmg-num p)))
+  (let ((hoge 0))
+    (addx hoge (x p))
+    (addy hoge (y p))
+    (addcolor hoge (color p))
+    (adddmg-num hoge (dmg-num p))
+    `(:|data| ,hoge)))
 
 (defun check-dmg-list (p)
   (if (dmg p)
       (make-damage-list (dmg p))
-      :false))
+      0))
 
 (defun make-object-list (p)
-  (append
-   `(:|x| ,(x p) :|y| ,(y p)
-     :|w| ,(w p) :|h| ,(h p)
-     :|img| ,(img p)
-     )
-   (if (/= (moto-w p) (w p))
-       `(:|moto-w| ,(moto-w p)))
-   (if (/= (moto-h p) (h p))
-       `(:|moto-h| ,(moto-h p)))
-   ))
+  (let ((hoge 0))
+    (addx hoge (x p))
+    (addy hoge (y p))
+    (addw hoge (w p))
+    (addh hoge (h p))
+    (addimg hoge (img p))
+    (addmoto-w hoge (moto-w p))
+    (addmoto-h hoge (moto-h p))
+    `(:|data| ,hoge)))
 
 (defun make-enemy-list (p)
-  (append
-  `(:|x| ,(x p) :|y| ,(y p) :|hp| ,(hp p) :|maxhp| ,(maxhp p)
-     :|dmg| ,(check-dmg-list p) :|anime-img| ,(anime-img p)
-     :|w| ,(w p) :|h| ,(h p) :|dir| ,(dir p)
-     :|dead| ,(json-true-false (dead p))
-     :|img| ,(img p))
-
-     (if (/= (moto-w p) (w p))
-	 `(:|moto-w| ,(moto-w p)))
-     (if (/= (moto-h p) (h p))
-	 `(:|moto-h| ,(moto-h p)))
-     ))
+  (let ((hoge 0))
+    (addx hoge (x p))
+    (addy hoge (y p))
+    (addhp hoge (hp p))
+    (addmaxhp hoge (maxhp p))
+    (addanime-img hoge (anime-img p))
+    (addw hoge (w p))
+    (addh hoge (h p))
+    (adddir hoge (dir p))
+    (adddead hoge (1or0 (dead p)))
+    (addimg hoge (img p))
+    (addmoto-w hoge (moto-w p))
+    (addmoto-h hoge (moto-h p))
+    `(:|data| ,hoge)))
 
 
 ;;ダンジョンのデータリスト
@@ -866,44 +885,42 @@
      ;;:|yuka| ,(mapcar #'make-object-list (donjon-yuka map))
   ))
 
+;; (player-data name  buki-data donjon-data)
 (defun make-player-list (g p)
-  (append
-   `(:|id| ,(id p)
-     :|level| ,(level p)
-     :|donjon| ,(donjon-data-list (aref (donjons g) (stage p)))
-     :|name| ,(name p)
-     :|hp| ,(hp p)
-     :|maxhp| ,(maxhp p)
-     :|x| ,(x p)
-     :|y| ,(y p)
-     :|exp| ,(expe p)
-     :|stage| ,(stage p)
-     :|lvup-exp| ,(lvup-exp p)
-     :|str| ,(str p)
-     :|def| ,(def p)
-     :|hammer| ,(hammer p)
-     :|w| ,(w p)
-     :|h| ,(h p)
-     :|dir| ,(dir p)
-     :|img| ,(img p)
-     :|ready?| ,(json-true-false (ready? p))
-     :|hammer-now| ,(json-true-false (hammer-now p))
-     :|atk-now| ,(json-true-false (atk-now p))
-     :|buki| ,(make-object-list (buki p))
-     :|dead| ,(json-true-false (dead p)))
-
-   (if (/= (moto-w p) (w p))
-       `(:|moto-w| ,(moto-w p)))
-   (if (/= (moto-h p) (h p))
-       `(:|moto-h| ,(moto-h p)))
-   ))
+  (let ((hoge 0))
+    (addid hoge (id p)) ;; 3 max7
+    (addlevel hoge (level p)) ;; 5 max31
+    (addhp hoge (hp p)) ;; 7 max127
+    (addmaxhp hoge (maxhp p)) ;; 7 max127
+    (addx hoge (x p)) ;; 10 max1023
+    (addy hoge (y p)) ;; 10 max1023
+    (addexp hoge (expe p)) ;;8 max255
+    (addstage hoge (stage p)) ;; 5 max31
+    (addlvup-exp hoge (lvup-exp p)) ;;8 max255
+    (addstr hoge (str p)) ;; 6 max63
+    (adddef hoge (def p)) ;; 6 max63
+    (addhammer hoge (hammer p)) ;; 5 max31
+    (addw hoge (w p)) ;; 7 max127
+    (addh hoge (h p)) ;; 7 max127
+    (adddir hoge (dir p)) ;; 3 max7
+    (addimg hoge (img p)) ;; 4 max15
+    (addready hoge (1or0 (ready? p))) ;; 1
+    (addhammer-now hoge (1or0 (hammer-now p))) ;; 1
+    (addatk-now hoge (1or0 (atk-now p))) ;; 1
+    (adddead hoge (1or0 (dead p))) ;; 1
+    (addmoto-w hoge (moto-w p)) ;; 7 max127
+    (addmoto-h hoge (moto-h p)) ;; 7 max127
+    `(:|data| ,hoge  :|name| ,(name p) ;; todo 35 7*5  
+	    :|buki| ,(make-object-list (buki p)) ;; 1
+	    :|donjon| ,(donjon-data-list (aref (donjons g) (stage p))))))
 
 (defun make-players-list (g)
   (loop for p in (players g)
        collect (make-player-list g p)))
 
+;;(type players event)
 (defun make-donjon-data (g)
-  (append `(:|type| "playing")
+  (append `(:|type| ,+playing+)
           ;;(donjon-data-list (donjon g))
           `(:|players| ,(make-players-list g))
 	  `(:|events| ,(events g))))
@@ -1005,11 +1022,11 @@
 	  (w player) *p-w* (moto-w player) *p-w*
 	  (h player) *p-h* (moto-h player) *p-h*
 	  (w/2 player) *p-w/2* (h/2 player) *p-h/2*
-	  (stage player) 10 (str player) 5 (def player) 2
+	  (stage player) 1 (str player) 5 (def player) 2
 	  (ido-spd player) 2
 	  (buki player)
 	  (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
-	  (img player) +down+ (dir player) :down)
+	  (img player) +down+ (dir player) +down+)
     
     (setf (players g) (append (players g) (list player)))))
 
@@ -1029,6 +1046,9 @@
     (push (mod n 256) ls)
     (setf n (truncate n 256))
     ls))
+
+(defun game-kill-player (p)
+  (setf (dead p) t))
 
 (defmethod remote-player-send-message ((rp remote-player) data)
   (when (stream1 rp)
@@ -1086,11 +1106,11 @@
 (defun game-broadcast-result (g)
   (game-broadcast-message
    g
-   `(:|type| "result"
+   `(:|type| ,+result+
       :|ranking| ,(make-ranking-data g))))
 
 (defun game-broadcast-status (g timeout-seconds)
-  (game-broadcast-message g `(:|type| "status" :|timeout-seconds| ,timeout-seconds
+  (game-broadcast-message g `(:|type| ,+status+ :|timeout-seconds| ,timeout-seconds
 			       :|map| ,(make-donjon-data g))))
 
 
@@ -1108,8 +1128,7 @@
   (dolist (rp (players g))
     (remote-player-close-stream rp)))
 
-(defun game-kill-player (p)
-  (setf (dead p) t))
+
 
 
 (defun valid-command? (str)
@@ -1157,14 +1176,15 @@
        (set-buki-pos p)
        (setf (atk-now p) t)
        (buki-hit-enemy p g))
-      ((equal (command p) "C")
+      ((and (equal (command p) "C")
+	    (> (hammer p) 0))
        (set-atk-img p)
        (set-buki-pos p)
        (setf (hammer-now p) t)
        (hammer-hit-kabe p g))
       ((equal (command p) "UP")
-       (when (not (eq (dir p) :up))
-	 (setf (dir p) :up))
+       (when (/= (dir p) +up+)
+	 (setf (dir p) +up+))
        (update-ido-anime-img p)
        (decf (y p) (ido-spd p))
        (let ((blo  (block-hit-p g p)))
@@ -1172,8 +1192,8 @@
 	   (incf (y p) (ido-spd p))
 	   (merikomi-hantei g p))))
       ((equal (command p) "DOWN")
-       (when (not (eq (dir p) :down))
-	 (setf (dir p) :down))
+       (when (/= (dir p) +down+)
+	 (setf (dir p) +down+))
        (update-ido-anime-img p)
        (incf (y p) (ido-spd p))
        (let ((blo  (block-hit-p g p)))
@@ -1181,8 +1201,8 @@
 	   (decf (y p) (ido-spd p))
 	   (merikomi-hantei g p))))
       ((equal (command p) "RIGHT")
-       (when (not (eq (dir p) :right))
-	 (setf (dir p) :right))
+       (when (/= (dir p) +right+)
+	 (setf (dir p) +right+))
        (update-ido-anime-img p)
        (incf (x p) (ido-spd p))
        (let ((blo  (block-hit-p g p)))
@@ -1190,8 +1210,8 @@
 	   (decf (x p) (ido-spd p))
 	   (merikomi-hantei g p))))
       ((equal (command p) "LEFT")
-       (when (not (eq (dir p) :left))
-	 (setf (dir p) :left))
+       (when (/= (dir p) +left+)
+	 (setf (dir p) +left+))
        (update-ido-anime-img p)
        (decf (x p) (ido-spd p))
        (let ((blo  (block-hit-p g p)))
@@ -1236,7 +1256,7 @@
   (every #'dead (players g)))
 
 (defun game-broadcast-all-quit (g)
-  (game-broadcast-message g `(:|type| "quit")))
+  (game-broadcast-message g `(:|type| +quit+)))
  
 (defclass server ()
   (
@@ -1360,13 +1380,16 @@
                                           :timeout +client-read-timeout+))
 	       (rp (make-instance 'remote-player :stream1 stream :socket1 client)))
 	  (remote-player-receive-name rp)
-	  (game-add-player g rp)
-	  (v:error :game "~aがきたけど帰した" (name rp) )
-	  (remote-player-send-id rp)
-	  (game-broadcast-quit rp "stop")
-	  (setf (players g) (remove rp (players g) :test #'equal))
-	  (remote-player-close-stream rp)
-	  )))
+	  (if (> 4 (length (players g)))
+	      (progn (game-add-player g rp)
+		     (remote-player-send-id rp)
+		     (game-broadcast-map g :with-backgrounds t))
+	      (progn
+		(v:error :game "~aがきたけど帰した" (name rp) )
+		(game-broadcast-quit rp +stop+)
+		;;(setf (players g) (remove rp (players g) :test #'equal))
+		(remote-player-close-stream rp)
+		)))))
     (cond
       ((clear g)
        (v:info :game "ゲームクリア")
@@ -1395,14 +1418,14 @@
        (dolist (rp (players g))
 	 (cond
 	   ((dead rp)
-	    (game-broadcast-quit rp "dead")
+	    (game-broadcast-quit rp +dead+)
 	    (remote-player-close-stream rp)
 	    (v:error :game "~aが死亡しました。" (name rp))
 	    (setf (players g) (remove rp (players g) :test #'equal)))
 	   ((and (not (dead rp))
 		 (equal (command rp) "Q"))
 	    (game-kill-player  rp)
-	    (game-broadcast-quit rp "quit")
+	    (game-broadcast-quit rp +quit+)
 	    (remote-player-close-stream rp)
 	    (v:error :game "~aがやめました。" (name rp))
 	    (setf (players g) (remove rp (players g) :test #'equal)))))
