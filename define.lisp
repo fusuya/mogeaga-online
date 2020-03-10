@@ -181,6 +181,8 @@
 (defparameter *kabe-break* nil)
 (defparameter *HPbar-max* 40)
 
+(defparameter *out* nil)
+
 (my-enum +boots+ +door+ +hammer+ +hard-block+ +key+ +potion+ +soft-block+ +yuka+ +sword+ +cursor+ +kaidan+)
 
 (my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)

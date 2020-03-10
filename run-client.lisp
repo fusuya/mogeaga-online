@@ -1,4 +1,4 @@
-(ql:quickload '(:jonathan :cl-ppcre :usocket :verbose :ftw :gzip-stream))
+(ql:quickload '(:jonathan :cl-ppcre :usocket :verbose :ftw :gzip-stream  :bordeaux-threads))
 
 (defpackage moge
   (:use #:cl #:ftw #:cffi #:sb-bsd-sockets))

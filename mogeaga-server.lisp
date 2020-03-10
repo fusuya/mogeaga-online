@@ -1256,7 +1256,7 @@
   (every #'dead (players g)))
 
 (defun game-broadcast-all-quit (g)
-  (game-broadcast-message g `(:|type| +quit+)))
+  (game-broadcast-message g `(:|type| ,+quit+)))
  
 (defclass server ()
   (
