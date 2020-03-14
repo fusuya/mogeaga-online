@@ -780,8 +780,8 @@
               (setf done t))
              (t
               (translate-message msg)
-              (dispatch-message msg))))
-        (progn
-          (sleep 0.01)
-          (main-game-loop hwnd)))
+              (dispatch-message msg)))
+	    (progn
+	      (sleep 0.01)
+	      (main-game-loop hwnd))))
     (msg-wparam msg)))

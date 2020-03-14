@@ -164,9 +164,9 @@
     (let* ((dmg-x (+ x 10))
 	   (dmg-y (+ y 20))
 	   (dmg-num (damage-calc atker defender))
-	   (x-dir (if (eq (dir atker) :left) :left :right))
+	   (x-dir (if (eq (dir atker) +left+) +left+ +right+))
 	   (dmg (make-instance 'dmg-font :x dmg-x :y dmg-y :dmg-num  dmg-num
-			       :y-dir :up :x-dir x-dir
+			       :y-dir +up+ :x-dir x-dir
 			       :color (if (eq (type-of defender) 'remote-player)
 					  +red+ +white+)
 			       :maxy dmg-y :miny (- dmg-y 15))))
@@ -262,7 +262,7 @@
 	      ;;(setf (obj-type kabe) :yuka
 		;;    (img kabe) +yuka+)))
       (when hit?
-	;;(game-play-sound *atk-block-wav*)
+	(game-play-sound g *atk-block-wav*)
 	(when (>= (hammer p) 1)
 	  (decf (hammer p)))))))
 
@@ -357,10 +357,10 @@
 	 (set-rand-dir g e))))
     ((eq (dir e) +left+)
      (decf (x e) (ido-spd e))
-	    (let ((kabe  (block-hit-p g e)))
-	      (when kabe
-		(setf (x e) (+ (x kabe) (w kabe)))
-		(set-rand-dir g e))))))
+     (let ((kabe  (block-hit-p g e)))
+       (when kabe
+	 (setf (x e) (+ (x kabe) (w kabe)))
+	 (set-rand-dir g e))))))
 
 ;;dx dy以内のeから見たプレイヤーの方向を返す
 (defun enemy-can-atk? (g e dx dy)
@@ -412,7 +412,7 @@
 ;;オークの攻撃エフェクト追加
 (defun add-orc-atk-effect (g e dx dy)
   (let ((atk (make-instance 'enemy :img 0 :obj-type :orc-atk
-			    :x (- (x e) dx) :y (- (y e) dy)
+			    :x (- (x e) dx) :y (- (y e) dy) :stage (stage e)
 			    :str (str e) :anime-img +orc-atk+
 			    :moto-w (moto-w e) :moto-h (moto-h e)
 			    :w (w e) :h (h e) :w/2 (w/2 e) :h/2 (h/2 e))))
@@ -454,7 +454,7 @@
 ;;ヒドラの攻撃エフェクトを敵として追加
 (defun add-hydra-atk (g e)
   (let ((atk (make-instance 'enemy :img 0 :obj-type :hydra-atk
-			    :anime-img +hydra-atk+
+			    :anime-img +hydra-atk+ :stage (stage e)
 			    :x (- (x e) 32) :y (y e) :str (str e)
 			    :moto-w 32 :moto-h 32 :dir (dir e)
 			    :w 32 :h 32 :w/2 16 :h/2 16)))
@@ -497,7 +497,7 @@
 ;;ブリガンドのボール追加
 (defun add-bri-ball (g e dx dy)
   (let ((ball (make-instance 'enemy :img 0 :obj-type :briball
-			     :anime-img +brigand-ball+
+			     :anime-img +brigand-ball+ :stage (stage e)
 			     :moto-w 32 :moto-h 32 :dir (dir e)
 			     :str (str e) :maxhp 1 :hp 1 :def 0
 			     :w 16 :h 16 :w/2 8 :h/2 8)))
@@ -519,7 +519,7 @@
   (incf (dir-c e)) ;;移動カウンター更新
   (incf (atk-c e)) ;;攻撃カウンター
   (update-ido-anime-img e)
-  (when (and (>= (atk-c e) 70) ;;攻撃
+  (when (and (>= (atk-c e) 90) ;;攻撃
 	     (set-can-atk-dir g e 600 600))
     (setf (atk-c e) 0)
     (add-bri-ball-dir g e))
@@ -532,7 +532,7 @@
 (defun add-fire (g e fire-n)
   (let ((fire (make-instance 'enemy :img 0 :obj-type :fire
 			     :str (str e) :anime-img +dragon-fire+
-			     :moto-w *fire-w* :moto-h *fire-h*
+			     :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
     (cond
       ((eq (dir e) +up+)
@@ -709,15 +709,15 @@
   (loop for dmg in (donjon-dmgs donjon)
      do
        (cond
-	 ((eq :up (y-dir dmg))
-	  (if (eq (x-dir dmg) :right)
+	 ((eq +up+ (y-dir dmg))
+	  (if (eq (x-dir dmg) +right+)
 	      (incf (x dmg))
 	      (decf (x dmg)))
 	  (decf (y dmg))
 	  (when (= (y dmg) (miny dmg))
-	    (setf (y-dir dmg) :down)))
-	 ((eq :down (y-dir dmg))
-	  (if (eq (x-dir dmg) :right)
+	    (setf (y-dir dmg) +down+)))
+	 ((eq +down+ (y-dir dmg))
+	  (if (eq (x-dir dmg) +right+)
 	      (incf (x dmg))
 	      (decf (x dmg)))
 	  (incf (y dmg))
@@ -1014,21 +1014,23 @@
 ;; プレーヤーを参加させる。ここでIDを割り当てる。
 ;;初期値も決める
 (defun game-add-player (g player)
-  (let* ((id (length (players g)))
+  (let* ((id (if (players g)
+		 (1+ (apply #'max (mapcar #'id (players g))))
+		 0))
          (pos (player-init-pos (aref (donjons g) (stage player)))))
-    (setf (id player) id
-	  (x player) (* (car pos) *blo-w46*)
-          (y player) (* (cadr pos) *blo-h46*)
-	  (w player) *p-w* (moto-w player) *p-w*
-	  (h player) *p-h* (moto-h player) *p-h*
-	  (w/2 player) *p-w/2* (h/2 player) *p-h/2*
-	  (stage player) 1 (str player) 5 (def player) 2
-	  (ido-spd player) 2
-	  (buki player)
-	  (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
-	  (img player) +down+ (dir player) +down+)
-    
-    (setf (players g) (append (players g) (list player)))))
+      (setf (id player) id
+	    (x player) (* (car pos) *blo-w46*)
+	    (y player) (* (cadr pos) *blo-h46*)
+	    (w player) *p-w* (moto-w player) *p-w*
+	    (h player) *p-h* (moto-h player) *p-h*
+	    (w/2 player) *p-w/2* (h/2 player) *p-h/2*
+	    (stage player) 1 (str player) 5 (def player) 2
+	    (ido-spd player) 2 (hammer player) 3
+	    (buki player)
+	    (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
+	    (img player) +down+ (dir player) +down+)
+      
+      (setf (players g) (append (players g) (list player)))))
 
 
 (defmethod remote-player-send-id (player)
