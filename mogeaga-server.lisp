@@ -23,8 +23,8 @@
   (make-instance 'game :donjons (make-donjons)))
 
 ;;効果音ならす
-(defmethod game-play-sound ((g game) path)
-  (setf (events g) (append (events g) (list `("se" ,path)))))
+(defmethod game-play-sound ((g game) path stage)
+  (setf (events g) (append (events g) (list `("se" ,path ,stage)))))
 
 ;;時間変換
 (defun get-hms (n)
@@ -86,30 +86,30 @@
 	   (when (obj-hit-p p obj)
 	     (case (obj-type obj)
 	       (:key
-		(game-play-sound g *get-item-wav*)
+		(game-play-sound g *get-item-wav* (stage p))
 		(setf (key? p) t
 		      (img obj) +yuka+
 		      (obj-type obj) :yuka))
 	       (:potion
-		(game-play-sound g *get-potion-wav*)
+		(game-play-sound g *get-potion-wav* (stage p))
 		(setf (hp p) (maxhp p)
 		      (donjon-objects donjon)
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:sword
 		(with-slots (buki) p
-		  (game-play-sound g *get-item-wav*)
+		  (game-play-sound g *get-item-wav* (stage p))
 		  (setf (donjon-objects donjon)
 			(remove obj (donjon-objects donjon) :test #'equal))
 		  (when (> *buki-list-len* (atk buki))
 		    (setf (name buki) (nth (atk buki) *buki-list*))
 		    (incf (atk buki))))) ;;武器の攻撃力は１づつ上がる))
 	       (:hammer
-		(game-play-sound g *get-item-wav*)
+		(game-play-sound g *get-item-wav* (stage p))
 		(incf (hammer p))
 		(setf (donjon-objects donjon)
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:boots
-		(game-play-sound g *get-item-wav*)
+		(game-play-sound g *get-item-wav* (stage p))
 		(push obj (item p))
 		(setf (ido-spd p) 3 ;;移動速度アップ
 		      (boots? p) t
@@ -117,7 +117,7 @@
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:door
 		(when (key? p)
-		  (game-play-sound g *door-wav*)
+		  (game-play-sound g *door-wav* (stage p))
 		  (incf (stage p))
 		  (let ((pos (player-init-pos (aref donjons (stage p)))))
 		    (setf (key? p) nil
@@ -126,7 +126,7 @@
 			  (x p) (* (car pos) *blo-w46*)
 			  (y p) (* (cadr pos) *blo-h46*)))))
 	       (:open-door
-		(game-play-sound g *door-wav*)
+		(game-play-sound g *door-wav* (stage p))
 		(incf (stage p)))))))))
 
 ;;ダメージ計算
@@ -152,7 +152,7 @@
     (incf (expe atker) (expe defender))
     (loop while (>= (expe atker) (lvup-exp atker))
        do
-	 (game-play-sound g *lvup-wav*)
+	 (game-play-sound g *lvup-wav* (stage atker))
 	 (status-up atker)
 	 (incf (level atker))
 	 (setf (expe atker) (- (expe atker) (lvup-exp atker)))
@@ -199,7 +199,7 @@
 		       (null (dead e)))
 	      (case (obj-type e)
 		((:slime :orc :hydra :dragon :brigand :briball :yote1 :toge :boss)
-		 (game-play-sound g *atk-enemy-wav*)
+		 (game-play-sound g *atk-enemy-wav* (stage p))
 		 (setf (atkhit p) t) ;;攻撃があたりました
 		 (set-damage p e g)))))))) ;;ダメージ処理
 
@@ -262,7 +262,7 @@
 	      ;;(setf (obj-type kabe) :yuka
 		;;    (img kabe) +yuka+)))
       (when hit?
-	(game-play-sound g *atk-block-wav*)
+	(game-play-sound g *atk-block-wav* (stage p))
 	(when (>= (hammer p) 1)
 	  (decf (hammer p)))))))
 
@@ -292,7 +292,7 @@
     (loop for e in (donjon-enemies (aref donjons (stage p)))
        do (when (and (obj-hit-p p e)
 		     (null (dead e)))
-	    (game-play-sound g *damage-wav*)
+	    (game-play-sound g *damage-wav* (stage p))
 	    (set-damage e p g) 
 	    (setf (dmg-c p) 50)
 	    (case (obj-type e)
@@ -912,7 +912,9 @@
     (addmoto-h hoge (moto-h p)) ;; 7 max127
     `(:|data| ,hoge  :|name| ,(name p) ;; todo 35 7*5  
 	    :|buki| ,(make-object-list (buki p)) ;; 1
-	    :|donjon| ,(donjon-data-list (aref (donjons g) (stage p))))))
+	    :|donjon| ,(donjon-data-list (aref (donjons g) (stage p)))
+	    :|events| ,(remove nil (mapcar #'(lambda (x) (if (= (stage p) (third x))
+							     x)) (events g))))))
 
 (defun make-players-list (g)
   (loop for p in (players g)
@@ -921,9 +923,8 @@
 ;;(type players event)
 (defun make-donjon-data (g)
   (append `(:|type| ,+playing+)
-          ;;(donjon-data-list (donjon g))
           `(:|players| ,(make-players-list g))
-	  `(:|events| ,(events g))))
+	  `(:|events| 0))) ;;,(events g)))) ここがないとバグる
 
 
 
@@ -1015,7 +1016,9 @@
 ;;初期値も決める
 (defun game-add-player (g player)
   (let* ((id (if (players g)
-		 (1+ (apply #'max (mapcar #'id (players g))))
+		 (loop for i in '(0 1 2 3 4 5)
+		    when (null (find i (mapcar #'id (players g))))
+		    return i)
 		 0))
          (pos (player-init-pos (aref (donjons g) (stage player)))))
       (setf (id player) id

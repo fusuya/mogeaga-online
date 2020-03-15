@@ -278,9 +278,7 @@
 	 (def (getdef p))
          (exp (getexp p))
 	 (lvupexp (getlvup-exp p))
-         (hammer (gethammer p))
-	 (atk-now (getatk-now p))
-	 (hammer-now (gethammer-now p)))
+         (hammer (gethammer p)))
     (macrolet ((hoge (n)
 		 `(incf ,n 25)))
       (select-object *hmemdc* *font30*)
@@ -295,8 +293,8 @@
       (text-out *hmemdc* (format nil "~3d/~3d" exp lvupexp) (+ *map-w* 10) (hoge num))
       (text-out *hmemdc* (format nil "ハンマー") (+ *map-w* 10) (hoge num))
       (text-out *hmemdc* (format nil "残り:~d回" hammer) (+ *map-w* 10) (hoge num))
-      (text-out *hmemdc* (format nil "atknow ~d" atk-now) (+ *map-w* 10) (hoge num))
-      (text-out *hmemdc* (format nil "ハンマーnow ~d" hammer-now) (+ *map-w* 10) (hoge num)))))
+      (text-out *hmemdc* (format nil "id ~d" (getid p)) (+ *map-w* 10) (hoge num))
+      (text-out *hmemdc* (format nil "stage ~d" (getstage p)) (+ *map-w* 10) (hoge num)))))
       ;;;(text-out *hmemdc* (format nil "モゲアーガの塔 ~2,'0d階" (stage *p*)) 10 (+ *map-h* 10)))))
       ;;(text-out *hmemdc* (format nil "~2,'0d:~2,'0d:~2,'0d:~2,'0d" h m s ms) 200 (+ *map-h* 10))))))
 
@@ -312,7 +310,8 @@
       (text-out *hmemdc* (format nil "~a" name) (+ 10 (* x 100)) num)
       (text-out *hmemdc* (format nil "Lv:~2d" level) (+ 10 (* x 100)) (hoge num))
       (text-out *hmemdc* (format nil "HP:~2d/~2d" hp maxhp) (+ 10 (* x 100)) (hoge num))
-      (text-out *hmemdc* (format nil "攻:~2d" str) (+ 10 (* x 100)) (hoge num)))))
+      (text-out *hmemdc* (format nil "攻:~2d" str) (+ 10 (* x 100)) (hoge num))
+      (text-out *hmemdc* (format nil "stage:~2d" (getstage p)) (+ 10 (* x 100)) (hoge num)))))
 
 ;;プレイヤーたち描画
 (defun render-players (players now-stage)
