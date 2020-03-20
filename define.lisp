@@ -16,6 +16,7 @@
                                :flags '(:load-from-file :create-dib-section))))
     imgs))
 
+(defparameter *lock* (bt:make-lock))
 (defparameter *p-img* nil)
 (defparameter *p-atk-img* nil)
 (defparameter *buki-img* nil)
