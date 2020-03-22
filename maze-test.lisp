@@ -216,18 +216,25 @@
     (:yote1   (create-enemy e-type e-pos 3 3 50 300 20 stage))))
 
 ;;敵を配置する
-(defun set-enemies (map)
-  (let ((enemy-num (+ 3 (random 5)))) ;;1フロアに出る敵の数
+(defun set-enemies (map p-num)
+  (let ((enemy-num (+ (* 2 p-num) (random  5)))) ;;1フロアに出る敵の数
     (loop for i from 0 to enemy-num do
-	 (let* ((e-pos (nth (random (length (donjon-path map))) (donjon-path map)))
-		(e-type (appear-enemy))
-		(stage (donjon-stage map))
-		(e (create-enemies e-pos e-type stage)))
-	   ;;(when (= i 0) ;;固定ドロップ設定
-	   ;;  (setf (drop e) (drop-item-type map)))
-	   (push e (donjon-enemies map))
-	   (setf (donjon-path map)
-		 (remove e-pos (donjon-path map) :test #'equal))))))
+	 (if (= (length (donjon-path map)) 0)
+	     (return)
+	     (let* ((e-pos (nth (random (length (donjon-path map))) (donjon-path map)))
+		    (e-type (appear-enemy))
+		    (stage (donjon-stage map))
+		    (e (create-enemies e-pos e-type stage)))
+	       ;;(when (= i 0) ;;固定ドロップ設定
+	       ;;  (setf (drop e) (drop-item-type map)))
+	       (push e (donjon-enemies map))
+	       (setf (donjon-path map)
+		     (remove e-pos (donjon-path map) :test #'equal)))))))
+
+;;モンスター追加
+(defun add-enemies (g)
+  (loop :for i from 1 :to *donjons-num*
+     :do (set-enemies (aref (donjons g) i) (length (players  g)))))
 
 ;;ボス配置
 (defun set-boss (map)
@@ -325,11 +332,9 @@
 		  
 
 ;;迷路マップ生成
-(defun maze (map)
-  (let* ((x 0)
-         (startx 0)
-         (y 0)
-         (starty 0))
+(defun create-maze (map )
+  (let* ((x 0) (startx 0)
+         (y 0) (starty 0))
     (clear-mapdate map)
     (setf (donjon-map map) (make-array (list (donjon-tate map) (donjon-yoko map))));;マップ配列作成
     
@@ -361,7 +366,7 @@
        ;; 	     (x p) (* startx *blo-h46*)) ;;初期位置
        ;;パーティーの位置に敵を配置しないようにする
        ;;(setf (donjon-path map) (remove (list (x p) (y p)) (donjon-path map) :test #'equal))
-       (set-enemies map) ;;敵を配置
+       (set-enemies map 0) ;;敵を配置
        (set-key-door map))) ;;鍵とドアを配置
     (set-obj-info map)))
           ;;(d-map-map mapn)))

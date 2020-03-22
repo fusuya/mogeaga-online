@@ -578,7 +578,7 @@
 	 (send-message hwnd (const +wm-close+) nil nil))))))
 
 (defun display-status (status-message)
-  (let ((players (getf (getf status-message :|map|) :|players|))
+  (let ((players (getf status-message :|players|))
 	(num 30))
     (macrolet ((incf40 (n)
 		 `(incf ,n 40)))

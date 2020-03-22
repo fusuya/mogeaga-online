@@ -4,11 +4,6 @@
 (defvar +client-read-timeout+ 10)
 (defvar +registration-timeout+ 10) ;;一人目の参加から何秒でゲームを開始するか。
 
-;;TODO
-(defun create-donjon (g i)
-  (let ((d (make-donjon :tate *tate-block-num* :yoko *yoko-block-num* :stage i)))
-    (maze d (length (players g)))
-    (setf (aref (donjons g) i) d)))
 
 
 ;;ダンジョンを最初に全部作成しておく
@@ -16,7 +11,7 @@
   (let ((donjons-arr (make-array (1+ *donjons-num*))))
     (loop :for i :from 1 :to *donjons-num*
        :do (let ((d (make-donjon :tate *tate-block-num* :yoko *yoko-block-num* :stage i)))
-	     (maze d)
+	     (create-maze d)
 	     (setf (aref donjons-arr i) d)))
     donjons-arr))
 	 
@@ -130,7 +125,10 @@
 			  (y p) (* (cadr pos) *blo-h46*)))))
 	       (:open-door
 		(game-play-sound g *door-wav* (stage p))
-		(incf (stage p)))))))))
+		(incf (stage p))
+		(let ((pos (player-init-pos (aref donjons (stage p)))))
+		    (setf (x p) (* (car pos) *blo-w46*)
+			  (y p) (* (cadr pos) *blo-h46*))))))))))
 
 ;;ダメージ計算
 (defmethod damage-calc ((atker player) defender)
@@ -888,6 +886,18 @@
      ;;:|yuka| ,(mapcar #'make-object-list (donjon-yuka map))
   ))
 
+;;待機画面用データ
+(defun make-player-status (p)
+  (let ((hoge 0))
+    (addready hoge (ready? p))
+    `(:|data| ,hoge  :|name| ,(name p))))
+
+;;待機画面用データ
+(defun make-players-status (g)
+  (loop for p in (players g)
+       collect (make-player-status p)))
+  
+
 ;; (player-data name  buki-data donjon-data)
 (defun make-player-list (g p)
   (let ((hoge 0))
@@ -918,6 +928,8 @@
 	    :|donjon| ,(donjon-data-list (aref (donjons g) (stage p)))
 	    :|events| ,(remove nil (mapcar #'(lambda (x) (if (= (stage p) (third x))
 							     x)) (events g))))))
+
+
 
 (defun make-players-list (g)
   (loop for p in (players g)
@@ -1018,7 +1030,7 @@
 ;; プレーヤーを参加させる。ここでIDを割り当てる。
 ;;初期値も決める
 (defun game-add-player (g player)
-  (let* ((id (if (players g)
+  (let ((id (if (players g)
 		 (loop for i in '(0 1 2 3 4 5)
 		    when (null (find i (mapcar #'id (players g))))
 		    return i)
@@ -1031,12 +1043,19 @@
 	    (h player) *p-h* (moto-h player) *p-h*
 	    (w/2 player) *p-w/2* (h/2 player) *p-h/2*
 	    (stage player) 1 (str player) 5 (def player) 2
-	    (ido-spd player) 2 (hammer player) 3
-	    (buki player)
+	    (ido-spd player) 2 (hammer player) 3 (ready? player) 0
+	    (buki player) 
 	    (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
 	    (img player) +down+ (dir player) +down+)
       
       (setf (players g) (append (players g) (list player)))))
+
+;;プレイヤーの初期位置
+(defun set-players-pos (g)
+  (dolist (p (players g))
+    (let ((pos (player-init-pos (aref (donjons g) (stage p)))))
+      (setf (x p) (* (car pos) *blo-w46*)
+	    (y p) (* (cadr pos) *blo-h46*)))))
 
 
 (defmethod remote-player-send-id (player)
@@ -1119,7 +1138,7 @@
 
 (defun game-broadcast-status (g timeout-seconds)
   (game-broadcast-message g `(:|type| ,+status+ :|timeout-seconds| ,timeout-seconds
-			       :|map| ,(make-donjon-data g))))
+			       :|players| ,(make-players-status g))))
 
 
 (defun game-broadcast-quit (rp mes)
@@ -1179,7 +1198,7 @@
 ;; プレーヤーが動く。全てのプレーヤーのコマンドが入力されてから呼び出
 ;; す。
 (defun game-move-player (p g)
-  (when (not (dead p))
+  (when (null (dead p))
     (cond
       ((equal (command p) "Z")
        (set-atk-img p)
@@ -1237,7 +1256,14 @@
   (when (zerop (dmg-c p)) ;;dmg-cが0の時
     (hit-enemies-player p g) ;;ダメージ処理
     (when (dead p) ;;ゲームオーバー
-      (setf (state p) :dead)))
+      (setf (state p) :dead)
+      (when (key? p)
+	(let ((key (make-instance 'obj :x (x p) :y (y p)
+				   :w *obj-w* :h *obj-h* :w/2 (floor *obj-w* 2)
+				   :moto-w *obj-w* :moto-h *obj-h*
+				   :h/2 (floor *obj-h* 2)
+				   :obj-type :key :img +key+)))
+	  (push key (donjon-objects (aref (donjons g) (stage p))))))))
   (when (null (dead p))
     (cond
       ((atk-now p)
@@ -1333,8 +1359,8 @@
    ;;(try-read-remote-commands g)
    (dolist (rp (players g))
      (when (equal "ENTER" (command rp))
-       (setf (ready? rp) t)))
-   (when (and (every #'ready? (players g))
+       (setf (ready? rp) 1)))
+   (when (and (every #'(lambda (x) (= (ready? x) 1)) (players g))
 	      (null first-registration-time))
      (setf first-registration-time (get-internal-real-time)))
    
@@ -1374,32 +1400,38 @@
          (setf app-func #'playing)
          (setf first-registration-time nil)
          (v:info :game "ゲーム開始。")
+	 (add-enemies g)
 	 ;; 最初のmapメッセージでは各階の不変な地形を送る。
          (game-broadcast-map g :with-backgrounds t))))))
 
-(defmethod playing ((s server))
-  (with-slots
-	(app-func g server-socket) s
-    ;;途中追加みたいなのtodo
+;;ゲーム中にプレイヤー追加
+(defun tochu-add-player (s)
+  (with-slots (g server-socket) s
     (let* ((client (socket-accept server-socket)))
       (when client
 	(let* ((stream (socket-make-stream client
-                                          :input t
-                                          :output t
-                                          :element-type '(unsigned-byte 8)
-                                          :timeout +client-read-timeout+))
+					   :input t
+					   :output t
+					   :element-type '(unsigned-byte 8)
+					   :timeout +client-read-timeout+))
 	       (rp (make-instance 'remote-player :stream1 stream :socket1 client)))
 	  (remote-player-receive-name rp)
 	  (if (> 4 (length (players g)))
-	      (progn (game-add-player g rp)
+	      (progn (add-enemies g)
+		     (game-add-player g rp)
 		     (remote-player-send-id rp)
 		     (game-broadcast-map g :with-backgrounds t))
 	      (progn
 		(v:error :game "~aがきたけど帰した" (name rp) )
 		(game-broadcast-quit rp +stop+)
 		;;(setf (players g) (remove rp (players g) :test #'equal))
-		(remote-player-close-stream rp)
-		)))))
+		(remote-player-close-stream rp))))))))
+
+(defmethod playing ((s server))
+  (with-slots
+	(app-func g server-socket) s
+    ;;途中追加みたいなのtodo
+    (tochu-add-player s)
     (cond
       ((clear g)
        (v:info :game "ゲームクリア")
