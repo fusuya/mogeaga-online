@@ -186,7 +186,7 @@
 
 (my-enum +boots+ +door+ +hammer+ +hard-block+ +key+ +potion+ +soft-block+ +yuka+ +sword+ +cursor+ +kaidan+)
 
-(my-enum +purple+ +red+ +green+ +blue+ +yellow+ +cyan+ +pink+ +white+)
+(my-enum +white+ +red+  +green+ +blue+ +yellow+ +cyan+ +pink+ +purple+)
 
 (my-enum +status+ +playing+ +result+ +dead+ +stop-entry+ +quit+ +error+)
 ;;(my-enum +red+ +white+)

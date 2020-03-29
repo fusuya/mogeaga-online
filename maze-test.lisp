@@ -233,7 +233,7 @@
 
 ;;モンスター追加
 (defun add-enemies (g)
-  (loop :for i from 1 :to *donjons-num*
+  (loop :for i from 1 :below *donjons-num*
      :do (set-enemies (aref (donjons g) i) (length (players  g)))))
 
 ;;ボス配置
@@ -241,8 +241,8 @@
   (let* ((boss (make-instance 'enemy :x (* 10 *blo-w46*)
 			      :y (* 4 *blo-h46*)
 			      :moto-w 64 :moto-h 64
-			      :str 10  :def 20 :hp 1
-			      :maxhp 1 :anime-img +boss-anime+
+			      :str 15  :def 20 :hp 300
+			      :maxhp 300 :anime-img +boss-anime+
 			      :ido-spd 2 :expe 0 :stage (donjon-stage map)
 			      :w 64 :h 64 :atk-spd 30
 			      :w/2 32 :h/2 32

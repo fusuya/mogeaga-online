@@ -536,8 +536,6 @@
 	;;      (write-byte byte *stream*))
 	(setf *out* :name)
 	(setf *id* (parse-integer (read-line *stream*)))
-	;;(do-msg "受付完了：ゲーム開始待ち中" 100 100 *font40*)
-
 	(setf *game-state* :wait-game-start))
       (progn
 	(setf *game-state* :connect-error))))
@@ -575,6 +573,7 @@
 	(enter
 	 (setf *game-state* :title))
 	(q
+	 (setf *out-loop* nil)
 	 (send-message hwnd (const +wm-close+) nil nil))))))
 
 (defun display-status (status-message)
@@ -633,28 +632,27 @@
 ;;プレイ中のループ
 (defun wait-game-start ()
   (if (listen *stream*)
-      (progn
-	(let* ((message (read-message *stream*))
-	       (type (message-type message)))
-	  (cond
-	    ((eq type +status+)
-	     (display-status message))
-	    ((eq type +playing+)
-	     (render-map message))
-	    ((eq type +result+)
-	     (render-result message)
-	     (setf *game-state* :result))
-	    ((eq type +dead+)
-	     (init-parameter)
-	     (setf *game-state* :dead))
-	    ((eq type +stop-entry+)
-	     (init-parameter)
-	     (setf *game-state* :stop))
-	    ((eq type +quit+)
-	     (init-parameter))
-	    (t
-	     (error (format nil "予期しないメッセージタイプ: ~s"
-			    (message-type message)))))))))
+      (let* ((message (read-message *stream*))
+	     (type (message-type message)))
+	(cond
+	  ((eq type +status+)
+	   (display-status message))
+	  ((eq type +playing+)
+	   (render-map message))
+	  ((eq type +result+)
+	   (render-result message)
+	   (setf *game-state* :result))
+	  ((eq type +dead+)
+	   (init-parameter)
+	   (setf *game-state* :dead))
+	  ((eq type +stop-entry+)
+	   (init-parameter)
+	   (setf *game-state* :stop))
+	  ((eq type +quit+)
+	   (init-parameter))
+	  (t
+	   (error (format nil "予期しないメッセージタイプ: ~s"
+			  (message-type message))))))))
 
 ;;ゲームループ
 (defun main-game-loop (hwnd)
@@ -778,6 +776,7 @@
 (defun output-kun ()
   (loop :while *out-loop*
      :do
+       ;;(bt:with-lock-held (*lock*)
        (case *out*
 	 (:name
 	  (format *stream* "~A~%" *name*)
@@ -785,10 +784,15 @@
 	  (setf *out* :command))
 	 (:command
 	  (let ((com (keystate->command)))
-	    (when (not (equal *command* com))
-	      (setf *command* com)
-	      (format *stream* "~a~%" *command*)
-	      (force-output *stream*)))))
+	    (cond
+	      ((eq *game-state* :result)
+	       (when (or (enter *keystate*)
+			 (q *keystate*))
+		 (setf *out* nil)))
+	      ((not (equal *command* com))
+	       (setf *command* com)
+	       (format *stream* "~a~%" *command*)
+	       (force-output *stream*))))))
        (sleep 0.01)))
 
 ;;メイン

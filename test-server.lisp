@@ -1,5 +1,6 @@
 ;;TODO 
 ;;マルチスレッドの終わらせ方わからん
+;;ゲーム結果画面終わらせ方
 (defvar *port* 24336)
 (defvar +client-read-timeout+ 10)
 (defvar +registration-timeout+ 10) ;;一人目の参加から何秒でゲームを開始するか。
@@ -98,9 +99,7 @@
 		  (game-play-sound g *get-item-wav* (stage p))
 		  (setf (donjon-objects donjon)
 			(remove obj (donjon-objects donjon) :test #'equal))
-		  (when (> *buki-list-len* (atk buki))
-		    (setf (name buki) (nth (atk buki) *buki-list*))
-		    (incf (atk buki))))) ;;武器の攻撃力は１づつ上がる))
+		  (incf (str p))))
 	       (:hammer
 		(game-play-sound g *get-item-wav* (stage p))
 		(incf (hammer p))
@@ -115,8 +114,8 @@
 		      (remove obj (donjon-objects donjon) :test #'equal)))
 	       (:door
 		(when (key? p)
-		  (game-play-sound g *door-wav* (stage p))
 		  (incf (stage p))
+		  (game-play-sound g *door-wav* (stage p))
 		  (let ((pos (player-init-pos (aref donjons (stage p)))))
 		    (setf (key? p) nil
 			  (obj-type obj) :open-door
@@ -124,16 +123,16 @@
 			  (x p) (* (car pos) *blo-w46*)
 			  (y p) (* (cadr pos) *blo-h46*)))))
 	       (:open-door
-		(game-play-sound g *door-wav* (stage p))
 		(incf (stage p))
+		(game-play-sound g *door-wav* (stage p))
 		(let ((pos (player-init-pos (aref donjons (stage p)))))
-		    (setf (x p) (* (car pos) *blo-w46*)
-			  (y p) (* (cadr pos) *blo-h46*))))))))))
+		  (setf (x p) (* (car pos) *blo-w46*)
+			(y p) (* (cadr pos) *blo-h46*))))))))))
 
 ;;ダメージ計算
 (defmethod damage-calc ((atker player) defender)
   (with-slots (buki) atker
-    (let* ((a1 (+ (str atker) (atk buki))))
+    (let* ((a1 (str atker)))
       (max 1 (floor (* (- a1 (/ (def defender) 2)) (/ (+ 99 (random 55)) 256)))))))
 
 ;;ダメージ計算
@@ -168,8 +167,8 @@
 	   (x-dir (if (eq (dir atker) +left+) +left+ +right+))
 	   (dmg (make-instance 'dmg-font :x dmg-x :y dmg-y :dmg-num  dmg-num
 			       :y-dir +up+ :x-dir x-dir
-			       :color (if (eq (type-of defender) 'remote-player)
-					  +red+ +white+)
+			       :color (if (eq (type-of atker) 'remote-player)
+					  +white+ +red+)
 			       :maxy dmg-y :miny (- dmg-y 15))))
       (if (> (hp defender) dmg-num) ;;hpを減らす
 	  (decf (hp defender) dmg-num)
@@ -1042,7 +1041,7 @@
 	    (w player) *p-w* (moto-w player) *p-w*
 	    (h player) *p-h* (moto-h player) *p-h*
 	    (w/2 player) *p-w/2* (h/2 player) *p-h/2*
-	    (stage player) 1 (str player) 5 (def player) 2
+	    (stage player) 9 (str player) 5 (def player) 2
 	    (ido-spd player) 2 (hammer player) 3 (ready? player) 0
 	    (buki player) 
 	    (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
@@ -1152,8 +1151,9 @@
 
 ;; リモートプレーヤーとの接続を切る。ゲーム終了時の後処理。
 (defun game-close-connections (g)
-  (dolist (rp (players g))
-    (remote-player-close-stream rp)))
+  (bt:with-lock-held (*lock*)
+    (dolist (rp (players g))
+      (remote-player-close-stream rp))))
 
 
 
@@ -1177,7 +1177,7 @@
 (defun try-read-remote-commands (g)
   (dolist (rp (players g))
     (when (null (dead rp))
-    ;;(bt:with-lock-held (*lock*)
+    (bt:with-lock-held (*lock*)
     (when (listen (stream1 rp))
       ;; 読み込めるデータがある。1行全て読み込める
       ;; とは限らないが…。
@@ -1192,7 +1192,7 @@
 		(v:info :game "プレーヤー「~s」は不正なコマンド「~s」により反則負け。" (name rp) cmd)
 		(remote-player-send-message rp (make-error-message :reason "protocol-error" :message (format nil "不正なコマンド~s" cmd)))
 		(remote-player-close-stream rp)
-		(game-kill-player rp)))))))))
+		(game-kill-player rp))))))))))
 
 
 ;; プレーヤーが動く。全てのプレーヤーのコマンドが入力されてから呼び出
@@ -1309,8 +1309,7 @@
 
 (defmethod player-registration ((s server))
   (with-slots
-   (app-func g first-registration-time server-socket)
-   s
+   (app-func g first-registration-time server-socket) s
 
    ;; プレーヤーの登録処理。
 
@@ -1466,7 +1465,6 @@
 	    (setf (players g) (remove rp (players g) :test #'equal)))
 	   ((and (not (dead rp))
 		 (equal (command rp) "Q"))
-	    ;;(bt:with-lock-held (*lock*)
 	      (game-kill-player  rp)
 	      (game-broadcast-quit rp +quit+)
 	      (remote-player-close-stream rp)
@@ -1491,23 +1489,6 @@
 	    (sleep (- 1/30 d))
 	    (v:warn :server "処理に時間のかかったフレーム。~dミリ秒" (* 1000 d)))))))
 
-(defun output-kun (s)
-  (handler-case
-      (loop :do
-	 (server-do-iter s))
-    (sb-sys:interactive-interrupt (int)
-      (declare (ignore int))
-      (format t "hoge~%"))))
-
-(defun input-kun (s)
-  (with-slots (g) s
-    (handler-case
-	(loop :do
-	   (try-read-remote-commands g))
-      (sb-sys:interactive-interrupt (int)
-	(declare (ignore int))
-	(format t "moge~%")))))
-
 ;;さば
 (defun server-main ()
   (handler-case
@@ -1525,7 +1506,4 @@
 	  (bt:join-thread t2)))
     (sb-sys:interactive-interrupt (int)
       (declare (ignore int))
-      (progn
-	;; (bt:join-thread t1)
-	;; (bt:join-thread t2)
-	(format t "moge~%")))))
+      (format t "moge~%"))))
