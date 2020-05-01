@@ -280,13 +280,27 @@
 
 ;;適用
 (defclass enemy (common)
-  ((centerx      :accessor centerx    :initform 30  :initarg :centerx)
-   (centery      :accessor centery    :initform 30  :initarg :centery)
-   (drop         :accessor drop       :initform nil :initarg :drop)    ;;ドロップするアイテム
+  ((drop         :accessor drop       :initform nil :initarg :drop)    ;;ドロップするアイテム
    (vx           :accessor vx         :initform 2   :initarg :vx)
    (vy           :accessor vy         :initform 2   :initarg :vy)
-   (deg          :accessor deg        :initform 10  :initarg :deg)
    (anime-img    :accessor anime-img  :initform 0   :initarg :anime-img)))
+
+(defclass slime (enemy) ())
+(defclass orc (enemy) ())
+(defclass hydra (enemy) ())
+(defclass brigand (enemy) ())
+(defclass dragon (enemy) ())
+(defclass boss (enemy) ())
+(defclass yote1 (enemy) ())
+(defclass fire (enemy) ())
+(defclass briball (enemy) ())
+(defclass orc-atk (enemy) ())
+(defclass toge (enemy) ())
+(defclass hydra-atk (enemy)
+  ((centerx      :accessor centerx    :initform 30  :initarg :centerx)
+   (centery      :accessor centery    :initform 30  :initarg :centery)
+   (deg          :accessor deg        :initform 10  :initarg :deg)))
+
 
 ;;プレイヤー用
 (defclass player (common)

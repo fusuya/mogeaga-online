@@ -129,11 +129,14 @@
 		  (setf (x p) (* (car pos) *blo-w46*)
 			(y p) (* (cadr pos) *blo-h46*))))))))))
 
+(defun gonyuu (n)
+  (floor (+ n 0.5)))
+
 ;;ダメージ計算
 (defmethod damage-calc ((atker player) defender)
   (with-slots (buki) atker
     (let* ((a1 (str atker)))
-      (max 1 (floor (* (- a1 (/ (def defender) 2)) (/ (+ 99 (random 55)) 256)))))))
+      (max 1 (gonyuu (* (- a1 (/ (def defender) 2)) (/ (+ 99 (random 55)) 256)))))))
 
 ;;ダメージ計算
 (defmethod damage-calc ((atker enemy) defender)
@@ -160,7 +163,7 @@
 
 ;;ダメージ計算して　表示する位置とか設定
 (defun set-damage (atker defender g)
-  (with-slots (x y obj-type hp atk-spd) defender
+  (with-slots (x y hp obj-type atk-spd) defender
     (let* ((dmg-x (+ x 10))
 	   (dmg-y (+ y 20))
 	   (dmg-num (damage-calc atker defender))
@@ -174,14 +177,16 @@
 	  (decf (hp defender) dmg-num)
 	  (setf (hp defender) 0))
       (when (= 0 (hp defender)) ;; hpが0以下になったら死亡
-	(setf (dead defender) t)
+	(if (and (eq (type-of defender) 'boss)
+		 (eq obj-type :boss1)) ;;ボス第一形態
+	    (setf (atk-spd defender) 40
+		  (hp defender) 127
+		  (obj-type defender) :boss2)
+	    (setf (dead defender) t)) 
 	(when (eq (type-of atker) 'remote-player)
 	  (incf (totaldmg atker) dmg-num)
 	  (player-get-exp atker defender g)))
       (push dmg (donjon-dmgs (aref (donjons g) (stage atker)))) ;;ダメージを表示するためのもの
-      (when (and (eq obj-type :boss) ;;ボス発狂モード
-		 (>= 50 hp))
-	(setf (atk-spd defender) 40))
       )))
 
 ;;敵と武器の当たり判定
@@ -196,12 +201,13 @@
 	  (set-damage p e g)))
       (loop for e in (donjon-enemies (aref (donjons g) (stage p)))
 	 do (when (and (obj-hit-p buki e)
-		       (null (dead e)))
-	      (case (obj-type e)
-		((:slime :orc :hydra :dragon :brigand :briball :yote1 :toge :boss)
-		 (game-play-sound g *atk-enemy-wav* (stage p))
-		 (setf (atkhit p) t) ;;攻撃があたりました
-		 (set-damage p e g)))))))) ;;ダメージ処理
+		       (null (dead e))
+		       (not (eq (type-of e) 'fire))
+		       (not (eq (type-of e) 'hydra-atk))
+		       (not (eq (type-of e) 'orc-atk)))
+	      (game-play-sound g *atk-enemy-wav* (stage p))
+	      (setf (atkhit p) t) ;;攻撃があたりました
+	      (set-damage p e g)))))) ;;ダメージ処理
 
 ;;武器の画像を設定
 (defun set-buki-pos (p)
@@ -295,10 +301,9 @@
 	    (game-play-sound g *damage-wav* (stage p))
 	    (set-damage e p g) 
 	    (setf (dmg-c p) 50)
-	    (case (obj-type e)
-	      (:briball
+	    (when (eq (type-of e) 'briball)
 	       (setf (donjon-enemies (aref donjons (stage p)))
-		     (remove e (donjon-enemies (aref donjons (stage p))) :test #'equal))))))))
+		     (remove e (donjon-enemies (aref donjons (stage p))) :test #'equal)))))))
     
 ;;ランダム方向へ移動 '(:up :down :right :left :stop)
 (defun set-rand-dir (g e)
@@ -400,18 +405,28 @@
 	(setf (dir e) f-dir)
 	nil)))
 
-;;スライムの行動
-(defun update-slime (g e change-dir-time)
+;;スライム
+(defmethod update ((g game) (e slime))
   (incf (dir-c e)) ;;移動カウンター更新
   (update-ido-anime-img e)
-  (if (> (dir-c e) change-dir-time)
+  (if (> (dir-c e) 40)
       (progn (set-rand-dir g e)
 	     (setf (dir-c e) 0))
       (update-enemy-pos g e)))
 
+;;yote1
+(defmethod update ((g game) (e yote1))
+  (incf (dir-c e)) ;;移動カウンター更新
+  (update-ido-anime-img e)
+  (if (> (dir-c e) 10)
+      (progn (set-rand-dir g e)
+	     (setf (dir-c e) 0))
+      (update-enemy-pos g e)))
+
+
 ;;オークの攻撃エフェクト追加
 (defun add-orc-atk-effect (g e dx dy)
-  (let ((atk (make-instance 'enemy :img 0 :obj-type :orc-atk
+  (let ((atk (make-instance 'orc-atk :img 0
 			    :x (- (x e) dx) :y (- (y e) dy) :stage (stage e)
 			    :str (str e) :anime-img +orc-atk+
 			    :moto-w (moto-w e) :moto-h (moto-h e)
@@ -434,8 +449,7 @@
     (setf (atk-now e) nil
 	  (atk-c e) 0)))
 
-;;オークの行動
-(defun update-orc (g e)
+(defmethod update ((g game) (e orc))
   (cond
     ((atk-now e)
      (wait-atk-effect e *orc-atk-effect-time*))
@@ -453,7 +467,7 @@
 
 ;;ヒドラの攻撃エフェクトを敵として追加
 (defun add-hydra-atk (g e)
-  (let ((atk (make-instance 'enemy :img 0 :obj-type :hydra-atk
+  (let ((atk (make-instance 'hydra-atk :img 0
 			    :anime-img +hydra-atk+ :stage (stage e)
 			    :x (- (x e) 32) :y (y e) :str (str e)
 			    :moto-w 32 :moto-h 32 :dir (dir e)
@@ -463,7 +477,7 @@
     (push atk (donjon-enemies (aref (donjons g) (stage e))))))
 
 ;;ヒドラの攻撃更新 ヒドラの周りを一周させる
-(defun update-hydra-atk (g e)
+(defmethod update ((g game) (e hydra-atk))
   (incf (atk-c e))
   (let* ((radian  (/ (* (deg e) pi) 180))
 	 (addx (floor (* (cos radian) 30)))
@@ -478,7 +492,7 @@
 	    (remove e (donjon-enemies (aref (donjons g) (stage e))) :test #'equal)))))
 
 ;;ヒドラの行動
-(defun update-hydra (g e)
+(defmethod update ((g game) (e hydra))
   (cond
     ((atk-now e)
      (wait-atk-effect e *hydra-atk-effect-time*)) ;;TODO
@@ -496,7 +510,7 @@
 
 ;;ブリガンドのボール追加
 (defun add-bri-ball (g e dx dy)
-  (let ((ball (make-instance 'enemy :img 0 :obj-type :briball
+  (let ((ball (make-instance 'briball :img 0
 			     :anime-img +brigand-ball+ :stage (stage e)
 			     :moto-w 32 :moto-h 32 :dir (dir e)
 			     :str (str e) :maxhp 1 :hp 1 :def 0
@@ -515,7 +529,7 @@
     ((eq (dir e) +right+) (add-bri-ball g e -20 0))))
 
 ;;ブリガンドの行動
-(defun update-brigand (g e)
+(defmethod update ((g game) (e brigand))
   (incf (dir-c e)) ;;移動カウンター更新
   (incf (atk-c e)) ;;攻撃カウンター
   (update-ido-anime-img e)
@@ -529,8 +543,8 @@
       (update-enemy-pos g e)))
 
 ;;火追加 
-(defun add-fire (g e fire-n)
-  (let ((fire (make-instance 'enemy :img 0 :obj-type :fire
+(defmethod add-fire ((g game) (e dragon) fire-n)
+  (let ((fire (make-instance 'fire :img 0
 			     :str (str e) :anime-img +dragon-fire+
 			     :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
@@ -554,12 +568,12 @@
 	      (atk-c e) 0))))
 
 ;;火追加ボス 
-(defun boss-add-fire (g e fire-n)
-  (let ((fire (make-instance 'enemy :img 0 :obj-type :fire
+(defmethod add-fire ((g game) (e boss) fire-n)
+  (let ((fire (make-instance 'fire :img 0
 			     :str (str e) :anime-img +dragon-fire+
 			     :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			     :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*))
-	(fire2 (make-instance 'enemy :img 0 :obj-type :fire
+	(fire2 (make-instance 'fire :img 0
 			      :str (str e) :anime-img +dragon-fire+
 			      :moto-w *fire-w* :moto-h *fire-h* :stage (stage e)
 			      :w *fire-w* :h *fire-h* :w/2 *fire-w/2* :h/2 *fire-h/2*)))
@@ -596,15 +610,13 @@
   (incf (atk-c e)) ;;火を追加する間隔
   (when (zerop (mod (atk-c e) fire-time))
     (let ((fire-n (floor (atk-c e) fire-time)))
-      (case (obj-type e)
-	(:dragon (add-fire g e fire-n))
-	(:boss (boss-add-fire g e fire-n)))
+      (add-fire g e fire-n)
       (when (= fire-n max-fire)
 	(setf (atk-now e) nil
 	      (atk-c e) 0)))))
 
 ;;ドラゴンの行動
-(defun update-dragon (g e)
+(defmethod update ((g game) (e dragon))
   (cond
     ((atk-now e)
      (check-add-fire g e 3 30))
@@ -621,14 +633,14 @@
 	 (update-enemy-pos g e)))))
 
 ;;火の更新
-(defun update-fire (g e)
+(defmethod update ((g game) (e fire))
   (incf (atk-c e))
   (when (>= (atk-c e) 50) ;;火を消す
     (setf (donjon-enemies (aref (donjons g) (stage e)))
 	  (remove e (donjon-enemies (aref (donjons g) (stage e))) :test #'equal))))
 
 ;;ぶりボールの更新
-(defun update-briball (g e)
+(defmethod update ((g game) (e briball))
   (cond
     ((eq (dir e) +up+) (decf (y e)))
     ((eq (dir e) +down+) (incf (y e)))
@@ -638,7 +650,7 @@
     (setf (donjon-enemies (aref (donjons g) (stage e)))
 	  (remove e (donjon-enemies (aref (donjons g) (stage e))) :test #'equal))))
 
-(defun update-orc-atk-effect (g e)
+(defmethod update ((g game) (e orc-atk))
   (incf (atk-c e))
   (when (>= (atk-c e) *orc-atk-effect-time*)
     (setf (donjon-enemies (aref (donjons g) (stage e)))
@@ -646,7 +658,7 @@
 
 ;;ボスのとげ攻撃
 (defun boss-toge-atk (g e)
-  (let ((toge (make-instance 'enemy :img 0 :obj-type :toge :hp 1 :maxhp 1
+  (let ((toge (make-instance 'toge :img 0 :hp 1 :maxhp 1
 			     :anime-img +boss-atk1+ :stage (stage e)
 			     :str (str e) :x (x e) :y (+ (y e) (floor (h e) 2))
 			     :moto-w *fire-w* :moto-h *fire-h* :vx (rand+- 3) :vy (rand+- 3)
@@ -656,7 +668,7 @@
 	  (atk-c e) 0)))
 
 ;;ボスの行動
-(defun update-boss (g e)
+(defmethod update ((g game) (e boss))
   (cond
     ((eq (atk-now e) :fire)
      (check-add-fire g e 5 20))
@@ -681,7 +693,7 @@
 	 (update-enemy-pos g e)))))
 
 ;;ボスのとげ攻撃の更新
-(defun update-toge (g e)
+(defmethod update ((g game) (e toge))
   (incf (x e) (vx e))
   (incf (y e) (vy e))
   (incf (atk-c e))
@@ -732,19 +744,7 @@
        do (let ((donjon (aref donjons s)))
 	    (loop for e in (donjon-enemies donjon)
 	       do (when (null (dead e))
-		   (case (obj-type e)
-		     (:slime   (update-slime g e 40))
-		     (:dragon  (update-dragon g e))
-		     (:brigand (update-brigand g e))
-		     (:hydra   (update-hydra g e))
-		     (:hydra-atk (update-hydra-atk g e))
-		     (:fire    (update-fire g e))
-		     (:briball (update-briball g e))
-		     (:orc     (update-orc g e))
-		     (:yote1   (update-slime g e 10))
-		     (:toge    (update-toge g e))
-		     (:boss    (update-boss g e))
-		     (:orc-atk (update-orc-atk-effect g e)))))))))
+		    (update g e)))))))
 
 
 
@@ -769,14 +769,15 @@
     (:sword +sword+)))
 
 ;;通常のドロップアイテム
-(defun normal-drop-item ()
-  (let* ((n (random 100)))
-    (cond
-      ((>= 5 n 0)   :boots)
-      ((>= 25 n 10)  :potion)
-      ((>= 45 n 26) :hammer)
-      ((>= 51  n 46) :sword)
-      (t nil))))
+
+(defun normal-drop-item (&key (boots 5) (potion 40) (hammer 30) (sword 15))
+  (let* ((lst `((:boots . ,boots) (:potion . ,potion) (:hammer . ,hammer) (:sword . ,sword)
+		(nil . 50)))
+	 (lst1 (mapcar #'cdr lst))
+	 (total-weight (apply #'+ lst1))
+	 (len (length lst1))
+	 (rnd (random total-weight)))
+    (rnd-pick 0 rnd lst len)))
 
 ;;靴持ってる時のドロップアイテム
 (defun no-boots-drop-item ()
@@ -789,7 +790,7 @@
 
 ;;アイテムの靴を落とす
 (defun enemy-drop-item (e g stage)
-  (let* ((item (no-boots-drop-item)))
+  (let* ((item (normal-drop-item)))
     (when item
       (let ((drop-item (make-instance 'obj :img (item-img item)
 				      :x (x e) :y (y e) :w 32 :h 32 :w/2 16 :h/2 16
@@ -809,7 +810,8 @@
 	    (loop for e in (donjon-enemies donjon)
 	       do (when (and (null (dmg e))
 			     (dead e))
-		    (when (eq (obj-type e) :boss)
+		    (when (and (eq (type-of e) 'boss)
+			       (eq (obj-type e) :boss2))
 		      (setf (clear g) t))
 		    (enemy-drop-item e g s)
 		    (setf (donjon-enemies donjon)
@@ -1041,7 +1043,7 @@
 	    (w player) *p-w* (moto-w player) *p-w*
 	    (h player) *p-h* (moto-h player) *p-h*
 	    (w/2 player) *p-w/2* (h/2 player) *p-h/2*
-	    (stage player) 9 (str player) 5 (def player) 2
+	    (stage player) 10 (str player) 26 (def player) 2
 	    (ido-spd player) 2 (hammer player) 3 (ready? player) 0
 	    (buki player) 
 	    (make-instance 'buki :name "こん棒" :atk 1 :w *p-w* :h *p-h* :moto-w *p-w* :moto-h *p-h* :w/2 *p-w/2* :h/2 *p-h/2* :img 0)
@@ -1422,7 +1424,7 @@
 		     (game-broadcast-map g :with-backgrounds t))
 	      (progn
 		(v:error :game "~aがきたけど帰した" (name rp) )
-		(game-broadcast-quit rp +stop+)
+		(game-broadcast-quit rp +stop-entry+)
 		;;(setf (players g) (remove rp (players g) :test #'equal))
 		(remote-player-close-stream rp))))))))
 

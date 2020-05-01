@@ -121,99 +121,77 @@
     (setf (aref (donjon-map map) (car door) (cadr door)) 2
 	  (aref (donjon-map map) (car key) (cadr key)) 3)))
 
+;;重み付け抽選-----------------------------------------------
+(defparameter *monster-list*
+  '((:slime 40) (:orc 30) (:brigand 20) (:hydra 20)
+    (:dragon 10) (:yote1 1)))
 
-;;出現する敵 階層によって出現率を変える
-(defun appear-enemy ()
-  (let* ((m (random 101))
-	 (slime-rate-max 40)
-	 (orc-rate-min   (1+ slime-rate-max))
-	 (orc-rate-max   (+ 10 orc-rate-min))
-	 (bri-rate-min (1+ orc-rate-max))
-	 (bri-rate-max (+ 10  bri-rate-min))
-	 (hydra-rate-min (1+ bri-rate-max))
-	 (hydra-rate-max (+ 10  hydra-rate-min))
-	 (dragon-rate-min (1+ hydra-rate-max))
-	 (dragon-rate-max (+ 10  dragon-rate-min)))
-    ;;(format t "slime:~d~%orc~d~%bri:~d~%hydra:~d~%dragon:~d~%"
-	;;    slime-rate-max orc-rate-max bri-rate-max hydra-rate-max dragon-rate-max)
-    (cond
-      ((>= 1 m 0) :yote1)
-      ((>= slime-rate-max m 2) :slime)
-      ((>= orc-rate-max m orc-rate-min) :orc)
-      ((>= bri-rate-max m bri-rate-min) :brigand)
-      ((>= hydra-rate-max m hydra-rate-min) :hydra)
-      ((>= dragon-rate-max m dragon-rate-min) :dragon)
-      (t :slime))))
+(defun rnd-pick (i rnd lst len)
+  (if (= i len)
+      (car (nth (1- i) lst))
+      (if (< rnd (cdr (nth i lst)))
+	  (car (nth i lst))
+	  (rnd-pick (1+ i) (- rnd (cdr (nth i lst))) lst len))))
 
-;;
-(defun random-enemy ()
-  (case (random 6)
-    (1 :slime)
-    (2 :orc)
-    (3 :brigand)
-    (4 :hydra)
-    (5 :dragon)
-    (0 :yote1)))
+(defun weightpick-monster (&key (slime 40) (orc 30) (brigand 20) (hydra 20) (dragon 10) (yote1 1))
+  (let* ((lst `((:slime . ,slime) (:orc . ,orc) (:brigand . ,brigand) (:hydra . ,hydra)
+		(:dragon . ,dragon) (:yote1 . ,yote1)))
+	 (lst1 (mapcar #'cdr lst))
+	 (total-weight (apply #'+ lst1))
+	 (len (length lst1))
+	 (rnd (random total-weight)))
+    (rnd-pick 0 rnd lst len)))
 
-(defun set-anime-img (e-type)
-  (case e-type
-    (:slime +slime-anime+)
-    (:orc +orc-anime+)
-    (:brigand +brigand-anime+)
-    (:hydra  +hydra-anime+)
-    (:dragon +dragon-anime+)
-    (:yote1 +yote-anime+)))
 
 ;;ドロップアイテムを返す 
 (defun drop-item-type (map)
   (car (donjon-drop-item map)))
 
 ;;敵生成
-(defun create-enemy (e-type e-pos hp str def expe ido-spd stage)
-  (make-instance 'enemy :x (* (car e-pos) *blo-w46*)
+(defun create-enemy (e-type e-pos anime-img hp str def expe ido-spd stage)
+  (make-instance e-type :x (* (car e-pos) *blo-w46*)
 		 :y (* (cadr e-pos) *blo-h46*)
 		 :moto-w *obj-w* :moto-h *obj-h* :stage stage
 		 :str str :def def :hp hp :maxhp hp
 		 :ido-spd ido-spd :expe expe
-		 :w *obj-w* :h *obj-h* :anime-img (set-anime-img e-type)
+		 :w *obj-w* :h *obj-h* :anime-img anime-img
 		 :w/2 (floor *obj-w* 2) :h/2 (floor *obj-h* 2)
-		 :obj-type e-type
 		 :img 1))
 
 ;;プレイヤーのいる階層で敵の強さが変わる
 (defun create-enemies (e-pos e-type stage)
   (case e-type
-    (:slime   (create-enemy e-type e-pos
+    (:slime   (create-enemy 'slime e-pos +slime-anime+
 			    (+ 6 (floor (random 10) 2))
 			    (+ 1 (floor (random 10) 2))
 			    (+ 1 (floor (random 10) 2))
 			    (+ 3 (floor (random 10) 3))
 			    1 stage))
-    (:orc     (create-enemy e-type e-pos
+    (:orc     (create-enemy 'orc e-pos +orc-anime+
 			    (+ 10 (floor (random 10) 2))
 			    (+ 4 (floor (random 10) 1.3))
 			    (+ 1 (floor (random 10) 1.4))
 			    (+ 5 (floor (random 10) 2))
 			    1 stage))
-    (:brigand (create-enemy e-type e-pos
+    (:brigand (create-enemy 'brigand e-pos +brigand-anime+
 			    (+ 6 (floor (random 10) 1.2))
 			    (+ 2 (floor (random 10) 2))
 			    (+ 2 (floor (random 10) 2))
 			    (+ 7 (floor (random 10) 2))
 			    2 stage))
-    (:hydra   (create-enemy e-type e-pos
+    (:hydra   (create-enemy 'hydra e-pos +hydra-anime+
 			    (+ 12 (floor (random 10) 1))
 			    (+ 2 (floor (random 10) 2))
 			    (+ 5 (floor (random 10) 1.3))
 			    (+ 10 (floor (random 10) 2))
 			    1 stage))
-    (:dragon  (create-enemy e-type e-pos
+    (:dragon  (create-enemy 'dragon e-pos +dragon-anime+
 			    (+ 20 (floor (random 10) 1.4))
 			    (+ 5 (floor (random 10) 1.3))
 			    (+ 6 (floor (random 10) 1.3))
 			    (+ 20 (floor (random 10) 2))
 			    2 stage))
-    (:yote1   (create-enemy e-type e-pos 3 3 50 300 20 stage))))
+    (:yote1   (create-enemy 'yote1 e-pos +yote-anime+ 3 3 50 300 20 stage))))
 
 ;;敵を配置する
 (defun set-enemies (map p-num)
@@ -222,7 +200,7 @@
 	 (if (= (length (donjon-path map)) 0)
 	     (return)
 	     (let* ((e-pos (nth (random (length (donjon-path map))) (donjon-path map)))
-		    (e-type (appear-enemy))
+		    (e-type (weightpick-monster))
 		    (stage (donjon-stage map))
 		    (e (create-enemies e-pos e-type stage)))
 	       ;;(when (= i 0) ;;固定ドロップ設定
@@ -238,15 +216,15 @@
 
 ;;ボス配置
 (defun set-boss (map)
-  (let* ((boss (make-instance 'enemy :x (* 10 *blo-w46*)
+  (let* ((boss (make-instance 'boss :x (* 10 *blo-w46*)
 			      :y (* 4 *blo-h46*)
 			      :moto-w 64 :moto-h 64
-			      :str 15  :def 20 :hp 300
-			      :maxhp 300 :anime-img +boss-anime+
+			      :str 15  :def 20 :hp 127
+			      :maxhp 127 :anime-img +boss-anime+
 			      :ido-spd 2 :expe 0 :stage (donjon-stage map)
 			      :w 64 :h 64 :atk-spd 30
 			      :w/2 32 :h/2 32
-			      :obj-type :boss
+			      :obj-type :boss1
 			      :img 1)))
     (push boss (donjon-enemies map))))
 
